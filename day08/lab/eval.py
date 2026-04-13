@@ -32,7 +32,7 @@ load_dotenv()
 # CẤU HÌNH
 # =============================================================================
 
-TEST_QUESTIONS_PATH = Path(__file__).parent / "data" / "grading_questions.json"
+TEST_QUESTIONS_PATH = Path(__file__).parent / "data" / "test_questions.json"
 RESULTS_DIR = Path(__file__).parent / "results"
 
 # Cấu hình baseline (Sprint 2)
@@ -46,22 +46,22 @@ BASELINE_CONFIG = {
 
 # Cấu hình các variants (Sprint 3)
 VARIANTS = [
-    # {
-    #     "retrieval_mode": "hybrid",
-    #     "top_k_search": 10,
-    #     "top_k_select": 3,
-    #     "use_rerank": False,
-    #     "query_transform_strategy": None,
-    #     "label": "variant_hybrid",
-    # },
-    # {
-    #     "retrieval_mode": "dense",
-    #     "top_k_search": 10,
-    #     "top_k_select": 3,
-    #     "use_rerank": True,
-    #     "query_transform_strategy": None,
-    #     "label": "variant_dense_rerank",
-    # },
+    {
+        "retrieval_mode": "hybrid",
+        "top_k_search": 10,
+        "top_k_select": 3,
+        "use_rerank": False,
+        "query_transform_strategy": None,
+        "label": "variant_hybrid",
+    },
+    {
+        "retrieval_mode": "dense",
+        "top_k_search": 10,
+        "top_k_select": 3,
+        "use_rerank": True,
+        "query_transform_strategy": None,
+        "label": "variant_dense_rerank",
+    },
     {
         "retrieval_mode": "dense",
         "top_k_search": 10,
