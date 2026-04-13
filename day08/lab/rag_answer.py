@@ -458,7 +458,7 @@ def build_grounded_prompt(query: str, context_block: str) -> str:
     - Điều chỉnh tone phù hợp với use case (CS helpdesk, IT support)
     """
     prompt = f"""Answer only from the retrieved context below.
-Nếu không thấy trong context, lập tức nói 'Không đủ dữ liệu', cấm viện dẫn luật bên ngoài.
+Nếu không thấy trong context, hãy trả lời bằng một câu hoàn chỉnh: 'Hiện tại hệ thống không đủ dữ liệu để trả lời câu hỏi này.', cấm viện dẫn luật/kiến thức bên ngoài.
 Cite the source field (in brackets like [1]) when possible.
 Keep your answer short, clear, and factual.
 Respond in the same language as the question.
@@ -639,7 +639,7 @@ def rag_answer(
             return {
                 "query": query,
                 "queries_used": queries_to_search,
-                "answer": "Không đủ dữ liệu",
+                "answer": "Hiện tại hệ thống không đủ dữ liệu để trả lời câu hỏi này.",
                 "sources": [],
                 "chunks_used": candidates,
                 "config": config,

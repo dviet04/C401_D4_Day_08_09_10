@@ -44,73 +44,109 @@ BASELINE_CONFIG = {
     "label": "baseline_dense",
 }
 
-# Cấu hình variant (Sprint 3 — điều chỉnh theo lựa chọn của nhóm)
-# TODO Sprint 4: Cập nhật VARIANT_CONFIG theo variant nhóm đã implement
-VARIANT_CONFIG = {
-    "retrieval_mode": "dense",
-    "top_k_search": 10,
-    "top_k_select": 3,
-    "use_rerank": True,
-    "query_transform_strategy": None,
-    "label": "variant_dense_rerank",
-}
+# Cấu hình các variants (Sprint 3)
+VARIANTS = [
+    {
+        "retrieval_mode": "hybrid",
+        "top_k_search": 10,
+        "top_k_select": 3,
+        "use_rerank": False,
+        "query_transform_strategy": None,
+        "label": "variant_hybrid",
+    },
+    {
+        "retrieval_mode": "dense",
+        "top_k_search": 10,
+        "top_k_select": 3,
+        "use_rerank": True,
+        "query_transform_strategy": None,
+        "label": "variant_dense_rerank",
+    },
+    {
+        "retrieval_mode": "dense",
+        "top_k_search": 10,
+        "top_k_select": 3,
+        "use_rerank": False,
+        "query_transform_strategy": "expansion",
+        "label": "variant_transform_expansion",
+    }
+]
 
 
 # =============================================================================
 # SCORING FUNCTIONS
 # 4 metrics từ slide: Faithfulness, Answer Relevance, Context Recall, Completeness
 # =============================================================================
+def is_no_data_answer(text: str) -> bool:
+    if not text:
+        return False
+    t = text.strip().lower()
+    patterns = [
+        "không đủ dữ liệu",
+        "khong du du lieu",
+        "không tìm thấy thông tin",
+        "khong tim thay thong tin",
+        "insufficient data",
+        "not enough data",
+        "not found in the provided documents",
+        "not found in the provided context",
+    ]
+    return any(p in t for p in patterns)
 
+
+def expected_is_no_data_case(expected_answer: str, expected_sources: List[str], category: str = "") -> bool:
+    category_l = (category or "").strip().lower()
+    if "insufficient" in category_l or "no answer" in category_l or "no-data" in category_l:
+        return True
+
+    if expected_sources:
+        return False
+
+    t = (expected_answer or "").strip().lower()
+    patterns = [
+        "không đủ dữ liệu",
+        "không tìm thấy thông tin",
+        "không có thông tin",
+        "insufficient data",
+        "not enough data",
+        "not found",
+    ]
+    return any(p in t for p in patterns)
+
+
+def answer_is_informative_abstention(answer: str) -> bool:
+    if not is_no_data_answer(answer):
+        return False
+    t = (answer or "").strip()
+    # câu quá cụt thì vẫn đúng nhưng chưa đủ informative
+    return len(t) >= 30
+    
 def score_faithfulness(
     answer: str,
     chunks_used: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """
-    Faithfulness: Câu trả lời có bám đúng chứng cứ đã retrieve không?
-    Câu hỏi: Model có tự bịa thêm thông tin ngoài retrieved context không?
-
-    Thang điểm 1-5:
-      5: Mọi thông tin trong answer đều có trong retrieved chunks
-      4: Gần như hoàn toàn grounded, 1 chi tiết nhỏ chưa chắc chắn
-      3: Phần lớn grounded, một số thông tin có thể từ model knowledge
-      2: Nhiều thông tin không có trong retrieved chunks
-      1: Câu trả lời không grounded, phần lớn là model bịa
-
-    TODO Sprint 4 — Có 2 cách chấm:
-
-    Cách 1 — Chấm thủ công (Manual, đơn giản):
-        Đọc answer và chunks_used, chấm điểm theo thang trên.
-        Ghi lý do ngắn gọn vào "notes".
-
-    Cách 2 — LLM-as-Judge (Tự động, nâng cao):
-        Gửi prompt cho LLM:
-            "Given these retrieved chunks: {chunks}
-             And this answer: {answer}
-             Rate the faithfulness on a scale of 1-5.
-             5 = completely grounded in the provided context.
-             1 = answer contains information not in the context.
-             Output JSON: {'score': <int>, 'reason': '<string>'}"
-
-    Trả về dict với: score (1-5) và notes (lý do)
-    """
     from openai import OpenAI
-    
-    if not chunks_used or answer.startswith("ERROR") or answer.startswith("PIPELINE"):
-        return {"score": 1, "notes": "Không có chunks hoặc lỗi pipeline"}
-    
+
+    if answer.startswith("ERROR") or answer.startswith("PIPELINE"):
+        return {"score": 1, "notes": "Lỗi pipeline"}
+
+    if not chunks_used:
+        if is_no_data_answer(answer):
+            return {"score": 5, "notes": "Không có chunks và model abstain đúng, không bịa thông tin"}
+        return {"score": 1, "notes": "Không có chunks nhưng model vẫn đưa ra nội dung cụ thể"}
+
     try:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return {"score": None, "notes": "OPENAI_API_KEY không được tìm thấy"}
-        
+
         client = OpenAI(api_key=api_key)
-        
-        # Format chunks cho LLM
+
         chunks_text = "\n\n".join([
-            f"[{i+1}] {c.get('text', '')[:300]}"
+            f"[{i+1}] {c.get('text', '')}"
             for i, c in enumerate(chunks_used[:3])
         ])
-        
+
         prompt = f"""Given these retrieved chunks:
 
 {chunks_text}
@@ -120,62 +156,70 @@ And this model answer:
 {answer}
 
 Rate the faithfulness on a scale of 1-5:
-5 = completely grounded, all information is in the provided chunks
-4 = mostly grounded, with 1 minor detail not clearly in context
-3 = partially grounded, some information appears to be from model knowledge
-2 = significant information not found in retrieved chunks
-1 = answer contains mostly hallucinated information not in context
+5 = completely grounded, all information is supported by the chunks
+4 = mostly grounded, with at most one minor unsupported detail
+3 = partially grounded, some details are not clearly supported
+2 = significant information is not supported by the chunks
+1 = answer is mostly unsupported or hallucinated
+
+Important:
+- If the answer correctly states that there is not enough information in the provided context,
+  and the chunks indeed do not contain the requested fact, this should be scored high.
+- Do not penalize concise abstention if it avoids unsupported claims.
 
 Output ONLY a JSON object: {{"score": <int 1-5>, "reason": "<brief reason>"}}"""
-        
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=150,
         )
-        
+
         result_text = response.choices[0].message.content.strip()
         result = json.loads(result_text)
-        
+
         return {
             "score": result.get("score", 3),
             "notes": result.get("reason", ""),
         }
     except Exception as e:
         return {"score": None, "notes": f"LLM scoring error: {str(e)[:50]}"}
-
-
 def score_answer_relevance(
     query: str,
     answer: str,
+    expected_answer: str,
+    expected_sources: List[str],
+    category: str = "",
 ) -> Dict[str, Any]:
-    """
-    Answer Relevance: Answer có trả lời đúng câu hỏi người dùng hỏi không?
-    Câu hỏi: Model có bị lạc đề hay trả lời đúng vấn đề cốt lõi không?
-
-    Thang điểm 1-5:
-      5: Answer trả lời trực tiếp và đầy đủ câu hỏi
-      4: Trả lời đúng nhưng thiếu vài chi tiết phụ
-      3: Trả lời có liên quan nhưng chưa đúng trọng tâm
-      2: Trả lời lạc đề một phần
-      1: Không trả lời câu hỏi
-
-    TODO Sprint 4: Implement tương tự score_faithfulness
-    """
     from openai import OpenAI
-    
+
     if answer.startswith("ERROR") or answer.startswith("PIPELINE"):
         return {"score": 1, "notes": "Lỗi pipeline"}
-    
+
+    no_data_case = expected_is_no_data_case(expected_answer, expected_sources, category)
+
+    if no_data_case:
+        if is_no_data_answer(answer):
+            if answer_is_informative_abstention(answer):
+                return {"score": 5, "notes": "Abstain đúng và đủ rõ ràng cho người dùng"}
+            return {"score": 4, "notes": "Abstain đúng nhưng còn hơi cụt"}
+        return {"score": 1, "notes": "Lẽ ra nên abstain nhưng model lại trả lời nội dung cụ thể"}
+
+    if is_no_data_answer(answer) and not no_data_case:
+        return {"score": 1, "notes": "Model abstain (không trả lời) trong khi câu hỏi có evidence và expect câu trả lời cụ thể"}
+
     try:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return {"score": None, "notes": "OPENAI_API_KEY không được tìm thấy"}
-        
+
         client = OpenAI(api_key=api_key)
-        
+
         prompt = f"""Question: {query}
+
+Reference expected answer:
+{expected_answer}
 
 Model Answer: {answer}
 
@@ -186,18 +230,23 @@ Rate the relevance to the question on a scale of 1-5:
 2 = partially off-topic
 1 = does not answer the question
 
+Important:
+- The reference expected answer describes the intended outcome, not the only acceptable wording.
+- Do not require wording overlap.
+- If the expected answer implies insufficient information, then a correct abstention would be relevant.
+
 Output ONLY a JSON object: {{"score": <int 1-5>, "reason": "<brief reason>"}}"""
-        
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=150,
         )
-        
+
         result_text = response.choices[0].message.content.strip()
         result = json.loads(result_text)
-        
+
         return {
             "score": result.get("score", 3),
             "notes": result.get("reason", ""),
@@ -205,32 +254,31 @@ Output ONLY a JSON object: {{"score": <int 1-5>, "reason": "<brief reason>"}}"""
     except Exception as e:
         return {"score": None, "notes": f"LLM scoring error: {str(e)[:50]}"}
 
-
 def score_context_recall(
     chunks_used: List[Dict[str, Any]],
     expected_sources: List[str],
+    expected_answer: str = "",
+    category: str = "",
 ) -> Dict[str, Any]:
-    """
-    Context Recall: Retriever có mang về đủ evidence cần thiết không?
-    Câu hỏi: Expected source có nằm trong retrieved chunks không?
+    no_data_case = expected_is_no_data_case(expected_answer, expected_sources, category)
 
-    Đây là metric đo retrieval quality, không phải generation quality.
-
-    Cách tính đơn giản:
-        recall = (số expected source được retrieve) / (tổng số expected sources)
-
-    Ví dụ:
-        expected_sources = ["policy/refund-v4.pdf", "sla-p1-2026.pdf"]
-        retrieved_sources = ["policy/refund-v4.pdf", "helpdesk-faq.md"]
-        recall = 1/2 = 0.5
-
-    TODO Sprint 4:
-    1. Lấy danh sách source từ chunks_used
-    2. Kiểm tra xem expected_sources có trong retrieved sources không
-    3. Tính recall score
-    """
     if not expected_sources:
-        # Câu hỏi không có expected source (ví dụ: "Không đủ dữ liệu" cases)
+        if no_data_case and not chunks_used:
+            return {
+                "score": 5,
+                "recall": 1.0,
+                "found": 0,
+                "missing": [],
+                "notes": "No expected sources and no retrieved chunks: correct no-data retrieval behavior",
+            }
+        if no_data_case:
+            return {
+                "score": 4,
+                "recall": 1.0,
+                "found": 0,
+                "missing": [],
+                "notes": "No expected sources; retrieved chunks exist but no source was required",
+            }
         return {"score": None, "recall": None, "notes": "No expected sources"}
 
     retrieved_sources = {
@@ -238,11 +286,9 @@ def score_context_recall(
         for c in chunks_used
     }
 
-    # TODO: Kiểm tra matching theo partial path (vì source paths có thể khác format)
     found = 0
     missing = []
     for expected in expected_sources:
-        # Kiểm tra partial match (tên file)
         expected_name = expected.split("/")[-1].replace(".pdf", "").replace(".md", "")
         matched = any(expected_name.lower() in r.lower() for r in retrieved_sources)
         if matched:
@@ -250,10 +296,11 @@ def score_context_recall(
         else:
             missing.append(expected)
 
-    recall = found / len(expected_sources) if expected_sources else 0
+    recall = found / len(expected_sources)
 
+    score = max(1, round(recall * 5))
     return {
-        "score": round(recall * 5),  # Convert to 1-5 scale
+        "score": score,
         "recall": recall,
         "found": found,
         "missing": missing,
@@ -261,72 +308,80 @@ def score_context_recall(
                  (f". Missing: {missing}" if missing else ""),
     }
 
-
 def score_completeness(
     query: str,
     answer: str,
     expected_answer: str,
+    expected_sources: List[str],
+    category: str = "",
 ) -> Dict[str, Any]:
-    """
-    Completeness: Answer có thiếu điều kiện ngoại lệ hoặc bước quan trọng không?
-    Câu hỏi: Answer có bao phủ đủ thông tin so với expected_answer không?
-
-    Thang điểm 1-5:
-      5: Answer bao gồm đủ tất cả điểm quan trọng trong expected_answer
-      4: Thiếu 1 chi tiết nhỏ
-      3: Thiếu một số thông tin quan trọng
-      2: Thiếu nhiều thông tin quan trọng
-      1: Thiếu phần lớn nội dung cốt lõi
-
-    TODO Sprint 4:
-    Option 1 — Chấm thủ công: So sánh answer vs expected_answer và chấm.
-    Option 2 — LLM-as-Judge: Gửi prompt cho LLM so sánh
-    """
     from openai import OpenAI
-    
-    if not expected_answer or answer.startswith("ERROR"):
-        return {"score": None, "notes": "Không có expected_answer hoặc lỗi pipeline"}
-    
+
+    if answer.startswith("ERROR"):
+        return {"score": None, "notes": "Lỗi pipeline"}
+
+    no_data_case = expected_is_no_data_case(expected_answer, expected_sources, category)
+
+    if no_data_case:
+        if is_no_data_answer(answer):
+            if answer_is_informative_abstention(answer):
+                return {"score": 5, "notes": "Đáp án đầy đủ cho no-data case"}
+            return {"score": 4, "notes": "Đúng ý nhưng còn ngắn, chưa giải thích đủ"}
+        return {"score": 1, "notes": "Expected no-data behavior nhưng model lại trả lời cụ thể"}
+
+    if is_no_data_answer(answer) and not no_data_case:
+        return {"score": 1, "notes": "Model abstain (không trả lời) nên completeness = 1"}
+
+    if not expected_answer:
+        return {"score": None, "notes": "Không có expected_answer"}
+
     try:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return {"score": None, "notes": "OPENAI_API_KEY không được tìm thấy"}
-        
+
         client = OpenAI(api_key=api_key)
-        
-        prompt = f"""Expected Answer (reference):
+
+        prompt = f"""
+Expected Answer (reference intent):
 {expected_answer}
 
 Model Answer:
 {answer}
 
 Compare the model answer with the expected answer.
-Rate completeness on a scale of 1-5:
-5 = includes all important points from the expected answer
-4 = missing one minor detail
-3 = missing some important information
-2 = missing significant information
-1 = missing most of the key content
 
-Output ONLY a JSON object: {{"score": <int 1-5>, "missing": "<what's missing>"}}"""
-        
+IMPORTANT:
+- Identify ALL key facts and conditions in the expected answer.
+- Check whether the model answer includes EACH of them.
+- Missing ANY important condition (e.g., approval requirement, constraints, exceptions) MUST reduce the score.
+
+Rate completeness on a scale of 1-5:
+5 = all key facts and conditions are present
+4 = missing a minor detail
+3 = missing one important detail
+2 = missing multiple important details
+1 = missing most key content
+
+Output ONLY JSON:
+{{"score": <int>, "missing": "<what is missing>"}}
+"""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=150,
         )
-        
+
         result_text = response.choices[0].message.content.strip()
         result = json.loads(result_text)
-        
+
         return {
             "score": result.get("score", 3),
             "notes": result.get("missing", ""),
         }
     except Exception as e:
         return {"score": None, "notes": f"LLM scoring error: {str(e)[:50]}"}
-
 
 # =============================================================================
 # SCORECARD RUNNER
@@ -402,9 +457,26 @@ def run_scorecard(
 
         # --- Chấm điểm ---
         faith = score_faithfulness(answer, chunks_used)
-        relevance = score_answer_relevance(query, answer)
-        recall = score_context_recall(chunks_used, expected_sources)
-        complete = score_completeness(query, answer, expected_answer)
+        relevance = score_answer_relevance(
+            query=query,
+            answer=answer,
+            expected_answer=expected_answer,
+            expected_sources=expected_sources,
+            category=category,
+        )
+        recall = score_context_recall(
+            chunks_used=chunks_used,
+            expected_sources=expected_sources,
+            expected_answer=expected_answer,
+            category=category,
+        )
+        complete = score_completeness(
+            query=query,
+            answer=answer,
+            expected_answer=expected_answer,
+            expected_sources=expected_sources,
+            category=category,
+        )
 
         row = {
             "id": question_id,
@@ -611,27 +683,32 @@ if __name__ == "__main__":
         print("Pipeline chưa implement. Hoàn thành Sprint 2 trước.")
         baseline_results = []
 
-    # --- Chạy Variant (sau khi Sprint 3 hoàn thành) ---
-    print("\n--- Chạy Variant ---")
-    try:
-        variant_results = run_scorecard(
-            config=VARIANT_CONFIG,
-            test_questions=test_questions,
-            verbose=True,
-        )
-        variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
-        (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
-    except Exception as e:
-        print(f"Lỗi chạy variant: {e}")
-        variant_results = []
+    # --- Chạy Các Variant (sau khi Sprint 3 hoàn thành) ---
+    print("\n--- Chạy Các Variant ---")
+    all_variant_results = {}
+    for v_config in VARIANTS:
+        try:
+            v_results = run_scorecard(
+                config=v_config,
+                test_questions=test_questions,
+                verbose=True,
+            )
+            v_md = generate_scorecard_summary(v_results, v_config["label"])
+            (RESULTS_DIR / f"scorecard_{v_config['label']}.md").write_text(v_md, encoding="utf-8")
+            all_variant_results[v_config["label"]] = v_results
+        except Exception as e:
+            print(f"Lỗi chạy variant {v_config['label']}: {e}")
+            all_variant_results[v_config["label"]] = []
 
     # --- A/B Comparison ---
-    if baseline_results and variant_results:
-        compare_ab(
-            baseline_results,
-            variant_results,
-            output_csv="ab_comparison.csv"
-        )
+    if baseline_results:
+        for label, v_results in all_variant_results.items():
+            if v_results:
+                compare_ab(
+                    baseline_results,
+                    v_results,
+                    output_csv=f"ab_comparison_{label}.csv"
+                )
 
     print("\n\nViệc cần làm Sprint 4:")
     print("  1. Hoàn thành Sprint 2 + 3 trước")
