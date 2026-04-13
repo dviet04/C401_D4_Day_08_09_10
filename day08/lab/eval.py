@@ -46,22 +46,22 @@ BASELINE_CONFIG = {
 
 # Cấu hình các variants (Sprint 3)
 VARIANTS = [
-    {
-        "retrieval_mode": "hybrid",
-        "top_k_search": 10,
-        "top_k_select": 3,
-        "use_rerank": False,
-        "query_transform_strategy": None,
-        "label": "variant_hybrid",
-    },
-    {
-        "retrieval_mode": "dense",
-        "top_k_search": 10,
-        "top_k_select": 3,
-        "use_rerank": True,
-        "query_transform_strategy": None,
-        "label": "variant_dense_rerank",
-    },
+    # {
+    #     "retrieval_mode": "hybrid",
+    #     "top_k_search": 10,
+    #     "top_k_select": 3,
+    #     "use_rerank": False,
+    #     "query_transform_strategy": None,
+    #     "label": "variant_hybrid",
+    # },
+    # {
+    #     "retrieval_mode": "dense",
+    #     "top_k_search": 10,
+    #     "top_k_select": 3,
+    #     "use_rerank": True,
+    #     "query_transform_strategy": None,
+    #     "label": "variant_dense_rerank",
+    # },
     {
         "retrieval_mode": "dense",
         "top_k_search": 10,
@@ -343,49 +343,28 @@ def score_completeness(
         client = OpenAI(api_key=api_key)
 
         prompt = f"""
-Question:
-{query}
-
-Expected Answer:
+Expected Answer (reference intent):
 {expected_answer}
 
 Model Answer:
 {answer}
 
-Your job is to judge COMPLETENESS only.
+Compare the model answer with the expected answer.
 
-Step 1:
-Break the Expected Answer into a checklist of atomic key facts / requirements / conditions.
-Each checklist item must contain exactly one important point.
+IMPORTANT:
+- Identify ALL key facts and conditions in the expected answer.
+- Check whether the model answer includes EACH of them.
+- Missing ANY important condition (e.g., approval requirement, constraints, exceptions) MUST reduce the score.
 
-Step 2:
-For each checklist item, mark whether the Model Answer covers it:
-- "covered"
-- "partially covered"
-- "missing"
+Rate completeness on a scale of 1-5:
+5 = all key facts and conditions are present
+4 = missing a minor detail
+3 = missing one important detail
+2 = missing multiple important details
+1 = missing most key content
 
-Step 3:
-Decide the final completeness score:
-5 = all important checklist items are covered
-4 = one minor item is missing or partially covered
-3 = one important item is missing
-2 = multiple important items are missing
-1 = most important content is missing
-
-Be strict:
-- Missing a condition, exception, approval requirement, threshold, or limitation counts as important.
-- Do not reward vague paraphrases if they omit the actual condition.
-- Focus on information coverage, not writing style.
-
-Output ONLY valid JSON in this format:
-{{
-  "score": <int 1-5>,
-  "checklist": [
-    {{"item": "...", "status": "covered|partially covered|missing"}}
-  ],
-  "missing": ["...", "..."],
-  "reason": "short explanation"
-}}
+Output ONLY JSON:
+{{"score": <int>, "missing": "<what is missing>"}}
 """
         response = client.chat.completions.create(
             model="gpt-4o-mini",
