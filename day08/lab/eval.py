@@ -46,25 +46,25 @@ BASELINE_CONFIG = {
 
 # Cấu hình các variants (Sprint 3)
 VARIANTS = [
-    {
-        "retrieval_mode": "hybrid",
-        "top_k_search": 10,
-        "top_k_select": 3,
-        "use_rerank": False,
-        "query_transform_strategy": None,
-        "label": "variant_hybrid",
-    },
+    # {
+    #     "retrieval_mode": "hybrid",
+    #     "top_k_search": 10,
+    #     "top_k_select": 3,
+    #     "use_rerank": False,
+    #     "query_transform_strategy": None,
+    #     "label": "variant_hybrid",
+    # },
+    # {
+    #     "retrieval_mode": "dense",
+    #     "top_k_search": 10,
+    #     "top_k_select": 3,
+    #     "use_rerank": True,
+    #     "query_transform_strategy": None,
+    #     "label": "variant_dense_rerank",
+    # },
     {
         "retrieval_mode": "dense",
-        "top_k_search": 10,
-        "top_k_select": 3,
-        "use_rerank": True,
-        "query_transform_strategy": None,
-        "label": "variant_dense_rerank",
-    },
-    {
-        "retrieval_mode": "dense",
-        "top_k_search": 10,
+        "top_k_search": 20,
         "top_k_select": 3,
         "use_rerank": False,
         "query_transform_strategy": "expansion",
