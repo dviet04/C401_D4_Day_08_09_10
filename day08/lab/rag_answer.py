@@ -307,9 +307,87 @@ def transform_query(query: str, strategy: str = "expansion") -> List[str]:
     - Decomposition: query hỏi nhiều thứ một lúc
     - HyDE: query mơ hồ, search theo nghĩa không hiệu quả
     """
-    # TODO Sprint 3: Implement query transformation
-    # Tạm thời trả về query gốc
-    return [query]
+    import json
+    from openai import OpenAI
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY không được tìm thấy")
+    
+    client = OpenAI(api_key=api_key)
+    
+    if strategy == "expansion":
+        # Thêm từ đồng nghĩa, alias, tên cũ
+        prompt = f"""Given the Vietnamese query: '{query}'
+Generate 2-3 alternative phrasings or related terms (synonyms, old names, aliases) that might retrieve the same documents.
+Output as a JSON array of strings (Vietnamese), including the original query.
+Example: ["original query", "alternative 1", "alternative 2"]
+
+Output ONLY the JSON array, no other text."""
+        
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200,
+        )
+        
+        try:
+            result_text = response.choices[0].message.content.strip()
+            variants = json.loads(result_text)
+            return variants if isinstance(variants, list) else [query]
+        except json.JSONDecodeError:
+            return [query]
+    
+    elif strategy == "decomposition":
+        # Tách query phức tạp thành 2-3 sub-queries
+        prompt = f"""Given the complex Vietnamese query: '{query}'
+Break it down into 2-3 simpler, independent sub-queries that together answer the original question.
+Output as a JSON array of strings (Vietnamese).
+Example: ["subquery 1", "subquery 2"]
+
+Output ONLY the JSON array, no other text."""
+        
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200,
+        )
+        
+        try:
+            result_text = response.choices[0].message.content.strip()
+            sub_queries = json.loads(result_text)
+            return sub_queries if isinstance(sub_queries, list) else [query]
+        except json.JSONDecodeError:
+            return [query]
+    
+    elif strategy == "hyde":
+        # HyDE: Sinh hypothetical document để embed thay query
+        prompt = f"""Given the Vietnamese question: '{query}'
+Generate a hypothetical answer or document snippet that would answer this question well.
+This will be used as a search query to find relevant documents.
+Keep it 1-2 sentences, natural Vietnamese.
+
+Output ONLY the hypothetical document, no other text."""
+        
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200,
+        )
+        
+        try:
+            hypothetical_doc = response.choices[0].message.content.strip()
+            # Trả về cả query gốc và hypothetical doc
+            return [hypothetical_doc, query]
+        except Exception:
+            return [query]
+    
+    else:
+        # Fallback: trả về query gốc
+        return [query]
 
 
 # =============================================================================
@@ -421,10 +499,11 @@ def rag_answer(
     top_k_search: int = TOP_K_SEARCH,
     top_k_select: int = TOP_K_SELECT,
     use_rerank: bool = False,
+    query_transform_strategy: Optional[str] = None,
     verbose: bool = False,
 ) -> Dict[str, Any]:
     """
-    Pipeline RAG hoàn chỉnh: query → retrieve → (rerank) → generate.
+    Pipeline RAG hoàn chỉnh: query → [transform] → retrieve → (rerank) → generate.
 
     Args:
         query: Câu hỏi
@@ -432,6 +511,8 @@ def rag_answer(
         top_k_search: Số chunk lấy từ vector store (search rộng)
         top_k_select: Số chunk đưa vào prompt (sau rerank/select)
         use_rerank: Có dùng cross-encoder rerank không
+        query_transform_strategy: None | "expansion" | "decomposition" | "hyde" 
+                                 (None = không transform, chỉ dùng query gốc)
         verbose: In thêm thông tin debug
 
     Returns:
@@ -440,6 +521,7 @@ def rag_answer(
           - "sources": list source names trích dẫn
           - "chunks_used": list chunks đã dùng
           - "query": query gốc
+          - "queries_used": list tất cả queries sau transform (nếu có)
           - "config": cấu hình pipeline đã dùng
 
     TODO Sprint 2 — Implement pipeline cơ bản:
@@ -460,20 +542,59 @@ def rag_answer(
         "top_k_search": top_k_search,
         "top_k_select": top_k_select,
         "use_rerank": use_rerank,
+        "query_transform_strategy": query_transform_strategy,
     }
 
+    # --- Bước 0: Query Transformation (Sprint 3) ---
+    queries_to_search = [query]
+    if query_transform_strategy:
+        try:
+            transformed = transform_query(query, strategy=query_transform_strategy)
+            queries_to_search = transformed
+            if verbose:
+                print(f"\n[RAG] Query transformed ({query_transform_strategy}):")
+                for i, q in enumerate(queries_to_search):
+                    print(f"  [{i+1}] {q}")
+        except Exception as e:
+            if verbose:
+                print(f"[RAG] Query transform failed: {e}. Using original query.")
+            queries_to_search = [query]
+
     # --- Bước 1: Retrieve ---
-    if retrieval_mode == "dense":
-        candidates = retrieve_dense(query, top_k=top_k_search)
-    elif retrieval_mode == "sparse":
-        candidates = retrieve_sparse(query, top_k=top_k_search)
-    elif retrieval_mode == "hybrid":
-        candidates = retrieve_hybrid(query, top_k=top_k_search)
-    else:
-        raise ValueError(f"retrieval_mode không hợp lệ: {retrieval_mode}")
+    # Lấy candidates từ tất cả transformed queries, merge và deduplicate
+    all_candidates = {}  # dict để avoid duplicates, key = chunk text
+    
+    for transformed_query in queries_to_search:
+        if retrieval_mode == "dense":
+            candidates = retrieve_dense(transformed_query, top_k=top_k_search)
+        elif retrieval_mode == "sparse":
+            candidates = retrieve_sparse(transformed_query, top_k=top_k_search)
+        elif retrieval_mode == "hybrid":
+            candidates = retrieve_hybrid(transformed_query, top_k=top_k_search)
+        else:
+            raise ValueError(f"retrieval_mode không hợp lệ: {retrieval_mode}")
+        
+        # Merge candidates (deduplicate by text)
+        for chunk in candidates:
+            chunk_text = chunk["text"]
+            if chunk_text not in all_candidates:
+                all_candidates[chunk_text] = chunk
+            else:
+                # Update score if this one is higher
+                if chunk.get("score", 0) > all_candidates[chunk_text].get("score", 0):
+                    all_candidates[chunk_text]["score"] = chunk.get("score", 0)
+    
+    # Convert back to list and sort by score
+    candidates = sorted(
+        all_candidates.values(),
+        key=lambda x: x.get("score", 0),
+        reverse=True
+    )[:top_k_search]
 
     if verbose:
         print(f"\n[RAG] Query: {query}")
+        if query_transform_strategy:
+            print(f"[RAG] Transform strategy: {query_transform_strategy}")
         print(f"[RAG] Retrieved {len(candidates)} candidates (mode={retrieval_mode})")
         for i, c in enumerate(candidates[:3]):
             print(f"  [{i+1}] score={c.get('score', 0):.3f} | {c['metadata'].get('source', '?')}")
@@ -495,6 +616,7 @@ def rag_answer(
                 print("[RAG] Tất cả chunks đều dưới ngưỡng Similarity Threshold 0.5 -> Abstain")
             return {
                 "query": query,
+                "queries_used": queries_to_search,
                 "answer": "Không đủ dữ liệu",
                 "sources": [],
                 "chunks_used": candidates,
@@ -519,6 +641,7 @@ def rag_answer(
 
     return {
         "query": query,
+        "queries_used": queries_to_search,
         "answer": answer,
         "sources": sources,
         "chunks_used": candidates,
@@ -530,32 +653,103 @@ def rag_answer(
 # SPRINT 3: SO SÁNH BASELINE VS VARIANT
 # =============================================================================
 
-def compare_retrieval_strategies(query: str) -> None:
+def compare_retrieval_strategies(
+    query: str,
+    retrieval_modes: List[str] = None,
+    transform_strategies: List[str] = None,
+) -> Dict[str, Dict[str, Any]]:
     """
-    So sánh các retrieval strategies với cùng một query.
+    So sánh các retrieval strategies và query transformation với cùng một query.
 
     TODO Sprint 3:
-    Chạy hàm này để thấy sự khác biệt giữa dense, sparse, hybrid.
+    Chạy hàm này để thấy sự khác biệt giữa density strategies hay transform strategies.
     Dùng để justify tại sao chọn variant đó cho Sprint 3.
 
     A/B Rule (từ slide): Chỉ đổi MỘT biến mỗi lần.
+    
+    Args:
+        query: Query để test
+        retrieval_modes: List retrieval modes để test (default: ["dense"])
+        transform_strategies: List query transform strategies (default: ["expansion", "decomposition", "hyde"])
+    
+    Returns:
+        Dict kết quả so sánh
     """
-    print(f"\n{'='*60}")
-    print(f"Query: {query}")
-    print('='*60)
-
-    strategies = ["dense", "hybrid"]  # Thêm "sparse" sau khi implement
-
-    for strategy in strategies:
-        print(f"\n--- Strategy: {strategy} ---")
+    if retrieval_modes is None:
+        retrieval_modes = ["dense"]
+    
+    if transform_strategies is None:
+        transform_strategies = ["expansion", "decomposition", "hyde"]
+    
+    results = {}
+    
+    print(f"\n{'='*80}")
+    print(f"SPRINT 3: COMPARE QUERY TRANSFORMATION STRATEGIES")
+    print(f"{'='*80}")
+    print(f"\nOriginal Query: {query}\n")
+    
+    # Baseline: Dense without transformation
+    print(f"{'─'*80}")
+    print("BASELINE: Dense Retrieval (No Transform)")
+    print(f"{'─'*80}")
+    try:
+        result = rag_answer(query, retrieval_mode="dense", verbose=False)
+        results["baseline_dense"] = result
+        print(f"Answer: {result['answer'][:200]}...")
+        print(f"Sources: {result['sources']}")
+        print(f"Chunks used: {len(result['chunks_used'])}")
+        print(f"Top chunk score: {result['chunks_used'][0].get('score', 0):.3f if result['chunks_used'] else 'N/A'}")
+    except Exception as e:
+        print(f"❌ Lỗi: {e}")
+        results["baseline_dense"] = None
+    
+    # Test each transform strategy
+    for strategy in transform_strategies:
+        print(f"\n{'─'*80}")
+        print(f"VARIANT: Dense + Query Transform ({strategy})")
+        print(f"{'─'*80}")
         try:
-            result = rag_answer(query, retrieval_mode=strategy, verbose=False)
-            print(f"Answer: {result['answer']}")
+            result = rag_answer(
+                query,
+                retrieval_mode="dense",
+                query_transform_strategy=strategy,
+                verbose=False
+            )
+            results[f"dense_transform_{strategy}"] = result
+            print(f"Queries used: {result['queries_used']}")
+            print(f"Answer: {result['answer'][:200]}...")
             print(f"Sources: {result['sources']}")
-        except NotImplementedError as e:
-            print(f"Chưa implement: {e}")
+            print(f"Chunks used: {len(result['chunks_used'])}")
+            print(f"Top chunk score: {result['chunks_used'][0].get('score', 0):.3f if result['chunks_used'] else 'N/A'}")
         except Exception as e:
-            print(f"Lỗi: {e}")
+            print(f"❌ Lỗi: {e}")
+            results[f"dense_transform_{strategy}"] = None
+    
+    # Print comparison summary
+    print(f"\n{'='*80}")
+    print("COMPARISON SUMMARY")
+    print(f"{'='*80}\n")
+    
+    comparison_data = []
+    for key, result in results.items():
+        if result:
+            comparison_data.append({
+                "Method": key,
+                "Answer Length": len(result["answer"]),
+                "Num Sources": len(result["sources"]),
+                "Num Chunks": len(result["chunks_used"]),
+                "Top Score": result["chunks_used"][0].get("score", 0) if result["chunks_used"] else 0,
+            })
+    
+    if comparison_data:
+        print(f"{'Method':<30} {'Ans Len':>8} {'Sources':>8} {'Chunks':>8} {'Top Score':>10}")
+        print("─" * 70)
+        for row in comparison_data:
+            print(f"{row['Method']:<30} {row['Answer Length']:>8} {row['Num Sources']:>8} {row['Num Chunks']:>8} {row['Top Score']:>10.3f}")
+    
+    print(f"\n{'='*80}\n")
+    
+    return results
 
 
 # =============================================================================
@@ -576,27 +770,30 @@ if __name__ == "__main__":
     ]
 
     print("\n--- Sprint 2: Test Baseline (Dense) ---")
-    for query in test_queries:
+    for query in test_queries[:2]:  # Test 2 queries đầu để tiết kiệm token
         print(f"\nQuery: {query}")
         try:
-            result = rag_answer(query, retrieval_mode="dense", verbose=True)
-            print(f"Answer: {result['answer']}")
+            result = rag_answer(query, retrieval_mode="dense", verbose=False)
+            print(f"Answer: {result['answer'][:150]}...")
             print(f"Sources: {result['sources']}")
         except NotImplementedError:
             print("Chưa implement — hoàn thành TODO trong retrieve_dense() và call_llm() trước.")
         except Exception as e:
             print(f"Lỗi: {e}")
 
-    # Uncomment sau khi Sprint 3 hoàn thành:
-    # print("\n--- Sprint 3: So sánh strategies ---")
-    # compare_retrieval_strategies("Approval Matrix để cấp quyền là tài liệu nào?")
-    # compare_retrieval_strategies("ERR-403-AUTH")
+    # Sprint 3: So sánh Query Transformation strategies
+    print("\n\n" + "="*80)
+    print("SPRINT 3: QUERY TRANSFORMATION STRATEGIES")
+    print("="*80)
+    print("Chọn 1 query để test các transformation strategies\n")
+    
+    test_query = "Ai phải phê duyệt để cấp quyền Level 3?"
+    compare_retrieval_strategies(test_query)
+    
+    print("\n\nNgười dùng có thể test thêm queries khác:")
+    print("  - compare_retrieval_strategies('Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?')")
+    print("  - compare_retrieval_strategies('SLA xử lý ticket P1 là bao lâu?')")
 
-    print("\n\nViệc cần làm Sprint 2:")
-    print("  1. Implement retrieve_dense() — query ChromaDB")
-    print("  2. Implement call_llm() — gọi OpenAI hoặc Gemini")
-    print("  3. Chạy rag_answer() với 3+ test queries")
-    print("  4. Verify: output có citation không? Câu không có docs → abstain không?")
 
     print("\nViệc cần làm Sprint 3:")
     print("  1. Chọn 1 trong 3 variants: hybrid, rerank, hoặc query transformation")

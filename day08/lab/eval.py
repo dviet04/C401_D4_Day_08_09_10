@@ -19,10 +19,14 @@ A/B Rule (từ slide):
 
 import json
 import csv
+import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from dotenv import load_dotenv
 from rag_answer import rag_answer
+
+load_dotenv()
 
 # =============================================================================
 # CẤU HÌNH
@@ -43,11 +47,12 @@ BASELINE_CONFIG = {
 # Cấu hình variant (Sprint 3 — điều chỉnh theo lựa chọn của nhóm)
 # TODO Sprint 4: Cập nhật VARIANT_CONFIG theo variant nhóm đã implement
 VARIANT_CONFIG = {
-    "retrieval_mode": "hybrid",   # Hoặc "dense" nếu chỉ đổi rerank
+    "retrieval_mode": "dense",
     "top_k_search": 10,
     "top_k_select": 3,
-    "use_rerank": True,           # Hoặc False nếu variant là hybrid không rerank
-    "label": "variant_hybrid_rerank",
+    "use_rerank": False,
+    "query_transform_strategy": "expansion",  # Sprint 3 variant: Query Expansion
+    "label": "variant_dense_expansion",
 }
 
 
@@ -88,12 +93,57 @@ def score_faithfulness(
 
     Trả về dict với: score (1-5) và notes (lý do)
     """
-    # TODO Sprint 4: Implement scoring
-    # Tạm thời trả về None (yêu cầu chấm thủ công)
-    return {
-        "score": None,
-        "notes": "TODO: Chấm thủ công hoặc implement LLM-as-Judge",
-    }
+    from openai import OpenAI
+    
+    if not chunks_used or answer.startswith("ERROR") or answer.startswith("PIPELINE"):
+        return {"score": 1, "notes": "Không có chunks hoặc lỗi pipeline"}
+    
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {"score": None, "notes": "OPENAI_API_KEY không được tìm thấy"}
+        
+        client = OpenAI(api_key=api_key)
+        
+        # Format chunks cho LLM
+        chunks_text = "\n\n".join([
+            f"[{i+1}] {c.get('text', '')[:300]}"
+            for i, c in enumerate(chunks_used[:3])
+        ])
+        
+        prompt = f"""Given these retrieved chunks:
+
+{chunks_text}
+
+And this model answer:
+
+{answer}
+
+Rate the faithfulness on a scale of 1-5:
+5 = completely grounded, all information is in the provided chunks
+4 = mostly grounded, with 1 minor detail not clearly in context
+3 = partially grounded, some information appears to be from model knowledge
+2 = significant information not found in retrieved chunks
+1 = answer contains mostly hallucinated information not in context
+
+Output ONLY a JSON object: {{"score": <int 1-5>, "reason": "<brief reason>"}}"""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=150,
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        result = json.loads(result_text)
+        
+        return {
+            "score": result.get("score", 3),
+            "notes": result.get("reason", ""),
+        }
+    except Exception as e:
+        return {"score": None, "notes": f"LLM scoring error: {str(e)[:50]}"}
 
 
 def score_answer_relevance(
@@ -113,10 +163,47 @@ def score_answer_relevance(
 
     TODO Sprint 4: Implement tương tự score_faithfulness
     """
-    return {
-        "score": None,
-        "notes": "TODO: Implement score_answer_relevance",
-    }
+    from openai import OpenAI
+    
+    if answer.startswith("ERROR") or answer.startswith("PIPELINE"):
+        return {"score": 1, "notes": "Lỗi pipeline"}
+    
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {"score": None, "notes": "OPENAI_API_KEY không được tìm thấy"}
+        
+        client = OpenAI(api_key=api_key)
+        
+        prompt = f"""Question: {query}
+
+Model Answer: {answer}
+
+Rate the relevance to the question on a scale of 1-5:
+5 = directly and completely answers the question
+4 = answers correctly but misses minor details
+3 = relevant but doesn't fully address the core question
+2 = partially off-topic
+1 = does not answer the question
+
+Output ONLY a JSON object: {{"score": <int 1-5>, "reason": "<brief reason>"}}"""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=150,
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        result = json.loads(result_text)
+        
+        return {
+            "score": result.get("score", 3),
+            "notes": result.get("reason", ""),
+        }
+    except Exception as e:
+        return {"score": None, "notes": f"LLM scoring error: {str(e)[:50]}"}
 
 
 def score_context_recall(
@@ -193,15 +280,52 @@ def score_completeness(
 
     TODO Sprint 4:
     Option 1 — Chấm thủ công: So sánh answer vs expected_answer và chấm.
-    Option 2 — LLM-as-Judge:
-        "Compare the model answer with the expected answer.
-         Rate completeness 1-5. Are all key points covered?
-         Output: {'score': int, 'missing_points': [str]}"
+    Option 2 — LLM-as-Judge: Gửi prompt cho LLM so sánh
     """
-    return {
-        "score": None,
-        "notes": "TODO: Implement score_completeness (so sánh với expected_answer)",
-    }
+    from openai import OpenAI
+    
+    if not expected_answer or answer.startswith("ERROR"):
+        return {"score": None, "notes": "Không có expected_answer hoặc lỗi pipeline"}
+    
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {"score": None, "notes": "OPENAI_API_KEY không được tìm thấy"}
+        
+        client = OpenAI(api_key=api_key)
+        
+        prompt = f"""Expected Answer (reference):
+{expected_answer}
+
+Model Answer:
+{answer}
+
+Compare the model answer with the expected answer.
+Rate completeness on a scale of 1-5:
+5 = includes all important points from the expected answer
+4 = missing one minor detail
+3 = missing some important information
+2 = missing significant information
+1 = missing most of the key content
+
+Output ONLY a JSON object: {{"score": <int 1-5>, "missing": "<what's missing>"}}"""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=150,
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        result = json.loads(result_text)
+        
+        return {
+            "score": result.get("score", 3),
+            "notes": result.get("missing", ""),
+        }
+    except Exception as e:
+        return {"score": None, "notes": f"LLM scoring error: {str(e)[:50]}"}
 
 
 # =============================================================================
@@ -263,6 +387,7 @@ def run_scorecard(
                 top_k_search=config.get("top_k_search", 10),
                 top_k_select=config.get("top_k_select", 3),
                 use_rerank=config.get("use_rerank", False),
+                query_transform_strategy=config.get("query_transform_strategy"),
                 verbose=False,
             )
             answer = result["answer"]
@@ -272,7 +397,7 @@ def run_scorecard(
             answer = "PIPELINE_NOT_IMPLEMENTED"
             chunks_used = []
         except Exception as e:
-            answer = f"ERROR: {e}"
+            answer = f"ERROR: {str(e)[:100]}"
             chunks_used = []
 
         # --- Chấm điểm ---
@@ -487,24 +612,26 @@ if __name__ == "__main__":
         baseline_results = []
 
     # --- Chạy Variant (sau khi Sprint 3 hoàn thành) ---
-    # TODO Sprint 4: Uncomment sau khi implement variant trong rag_answer.py
-    # print("\n--- Chạy Variant ---")
-    # variant_results = run_scorecard(
-    #     config=VARIANT_CONFIG,
-    #     test_questions=test_questions,
-    #     verbose=True,
-    # )
-    # variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
-    # (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
+    print("\n--- Chạy Variant ---")
+    try:
+        variant_results = run_scorecard(
+            config=VARIANT_CONFIG,
+            test_questions=test_questions,
+            verbose=True,
+        )
+        variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
+        (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
+    except Exception as e:
+        print(f"Lỗi chạy variant: {e}")
+        variant_results = []
 
     # --- A/B Comparison ---
-    # TODO Sprint 4: Uncomment sau khi có cả baseline và variant
-    # if baseline_results and variant_results:
-    #     compare_ab(
-    #         baseline_results,
-    #         variant_results,
-    #         output_csv="ab_comparison.csv"
-    #     )
+    if baseline_results and variant_results:
+        compare_ab(
+            baseline_results,
+            variant_results,
+            output_csv="ab_comparison.csv"
+        )
 
     print("\n\nViệc cần làm Sprint 4:")
     print("  1. Hoàn thành Sprint 2 + 3 trước")
