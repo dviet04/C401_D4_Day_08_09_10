@@ -19,6 +19,7 @@
 
 **Mô tả ngắn gọn:**
 > TODO: Mô tả hệ thống trong 2-3 câu. Nhóm xây gì? Cho ai dùng? Giải quyết vấn đề gì?
+Hệ thống của nhóm là một ứng dụng truy xuất thông tin thông minh, hỗ trợ IT Helpdesk và người dùng nội bộ tra cứu nhanh các chính sách, quy trình và tài liệu liên quan. Hệ thống giúp giảm thời gian tìm kiếm thông tin, tăng hiệu quả hỗ trợ và đảm bảo cung cấp câu trả lời chính xác, nhất quán.
 
 ---
 
@@ -27,22 +28,22 @@
 ### Tài liệu được index
 | File | Nguồn | Department | Số chunk |
 |------|-------|-----------|---------|
-| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | TODO |
-| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | TODO |
-| `access_control_sop.txt` | it/access-control-sop.md | IT Security | TODO |
-| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | TODO |
-| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | TODO |
+| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | 6 |
+| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | 5 |
+| `access_control_sop.txt` | it/access-control-sop.md | IT Security | 7 |
+| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | 6 |
+| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | 5 |
 
 ### Quyết định chunking
 | Tham số | Giá trị | Lý do |
 |---------|---------|-------|
-| Chunk size | TODO tokens | TODO |
-| Overlap | TODO tokens | TODO |
-| Chunking strategy | Heading-based / paragraph-based | TODO |
+| Chunk size | 450 tokens | Nằm trong range tối ưu (300–500 tokens) giúp cân bằng giữa ngữ cảnh đủ dài và retrieval chính xác; phù hợp với embedding model như text-embedding-3-small |
+| Overlap | 80 tokens | Giúp giữ ngữ cảnh liên tục giữa các chunk, tránh mất thông tin ở ranh giới (đặc biệt với câu dài hoặc điều khoản pháp lý). 80 tokens ~ mức cao trong range (50–80) nên tăng recall |
+| Chunking strategy | Heading-based / paragraph-based | Ưu tiên chia theo section/heading để giữ semantic structure, sau đó fallback sang paragraph/sentence splitting khi quá dài → đảm bảo chunk “tự nhiên” thay vì cắt cứng theo token. |
 | Metadata fields | source, section, effective_date, department, access | Phục vụ filter, freshness, citation |
 
 ### Embedding model
-- **Model**: TODO (OpenAI text-embedding-3-small / paraphrase-multilingual-MiniLM-L12-v2)
+- **Model**: OpenAI text-embedding-3-small 
 - **Vector store**: ChromaDB (PersistentClient)
 - **Similarity metric**: Cosine
 
@@ -96,7 +97,7 @@ Answer:
 ### LLM Configuration
 | Tham số | Giá trị |
 |---------|---------|
-| Model | TODO (gpt-4o-mini / gemini-1.5-flash) |
+| Model | gpt-4o-mini |
 | Temperature | 0 (để output ổn định cho eval) |
 | Max tokens | 512 |
 
@@ -120,17 +121,72 @@ Answer:
 
 > TODO: Vẽ sơ đồ pipeline nếu có thời gian. Có thể dùng Mermaid hoặc drawio.
 
-```mermaid
-graph LR
-    A[User Query] --> B[Query Embedding]
-    B --> C[ChromaDB Vector Search]
-    C --> D[Top-10 Candidates]
-    D --> E{Rerank?}
-    E -->|Yes| F[Cross-Encoder]
-    E -->|No| G[Top-3 Select]
-    F --> G
-    G --> H[Build Context Block]
-    H --> I[Grounded Prompt]
-    I --> J[LLM]
-    J --> K[Answer + Citation]
-```
+[Raw Documents]
+        |
+        v
+[Preprocess Metadata]
+        |
+        v
+[Chunking (450 tokens, overlap 80)]
+        |
+        v
+[Embedding (text-embedding-3-small)]
+        |
+        v
+[ChromaDB Vector Store]
+        |
+        v
+======================
+   RETRIEVAL
+======================
+        |
+        v
+[User Query] ----> [Query Alternatives]
+        |                 |
+        |-----------------|
+        v
+[Query Embedding]
+        |
+        v
+[Dense Search (ChromaDB)]
+        |
+        v
+[Top-10 Candidates]
+        |
+        v
+[Rerank?]
+   |        |
+  No       Yes
+   |        |
+   v        v
+[Top-3]   [Cross-Encoder]
+   |__________|
+        |
+        v
+======================
+   GENERATION
+======================
+        |
+        v
+[Build Context Block]
+        |
+        v
+[Grounded Prompt]
+        |
+        v
+[LLM (gpt-4o-mini)]
+        |
+        v
+[Answer + Citation]
+        |
+        v
+======================
+   EVALUATION
+======================
+        |
+        v
+[Baseline] ----\
+               \
+                --> [Score Metrics] --> [A/B Compare]
+               /
+[Variant] ----/
