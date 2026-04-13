@@ -62,15 +62,15 @@ Hệ thống của nhóm là một ứng dụng truy xuất thông tin thông mi
 ### Variant (Sprint 3)
 | Tham số | Giá trị | Thay đổi so với baseline |
 |---------|---------|------------------------|
-| Strategy | TODO (hybrid / dense) | TODO |
-| Top-k search | TODO | TODO |
-| Top-k select | TODO | TODO |
-| Rerank | TODO (cross-encoder / MMR) | TODO |
-| Query transform | TODO (expansion / HyDE / decomposition) | TODO |
+| Strategy | transform query | Baseline sử dụng dense |
+| Top-k search | 10 | Không thay đổi |
+| Top-k select | 3 | Không thay đổi |
+| Query transform | expansion | Baseline sử dụng dense |
 
 **Lý do chọn variant này:**
 > TODO: Giải thích tại sao chọn biến này để tune.
 > Ví dụ: "Chọn hybrid vì corpus có cả câu tự nhiên (policy) lẫn mã lỗi và tên chuyên ngành (SLA ticket P1, ERR-403)."
+Sử dụng expansion vì nó giải quyết mismatch query–document khi user dùng từ khác document, và nó phù hợp với dataset hiện tại (có nhiều từ viết tắt và cần phải phân biệt rõ ràng các từ viết tắt đó)
 
 ---
 

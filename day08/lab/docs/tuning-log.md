@@ -22,10 +22,10 @@ llm_model = gpt-4o-mini
 **Scorecard Baseline:**
 | Metric | Average Score |
 |--------|--------------|
-| Faithfulness | ? /5 |
-| Answer Relevance | ? /5 |
-| Context Recall | ? /5 |
-| Completeness | ? /5 |
+| Faithfulness | 3.40/5 |
+| Relevance | 4.20/5 |
+| Context Recall | 5.00/5 |
+| Completeness | 3.60/5 |
 
 **Câu hỏi yếu nhất (điểm thấp):**
 > TODO: Liệt kê 2-3 câu hỏi có điểm thấp nhất và lý do tại sao.
@@ -97,10 +97,10 @@ retrieval_mode = "hybrid"   # hoặc biến khác
 > TODO (Sprint 4): Điền sau khi hoàn thành evaluation.
 
 1. **Lỗi phổ biến nhất trong pipeline này là gì?**
-   > _____________
+   > Generation chưa faithful dù retrieval đúng (model không tổng hợp hoặc diễn đạt đúng từ context)
 
 2. **Biến nào có tác động lớn nhất tới chất lượng?**
-   > _____________
+   > Query transformation (cải thiện chất lượng context → ảnh hưởng trực tiếp đến answer)
 
 3. **Nếu có thêm 1 giờ, nhóm sẽ thử gì tiếp theo?**
-   > _____________
+   > Thử rerank (cross-encoder) để lọc top-k chunk tốt hơn vì hiện tại vẫn có noise trong context
