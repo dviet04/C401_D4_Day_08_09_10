@@ -76,10 +76,39 @@ def retrieve_dense(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]
         # Lưu ý: distances trong ChromaDB cosine = 1 - similarity
         # Score = 1 - distance
     """
-    raise NotImplementedError(
-        "TODO Sprint 2: Implement retrieve_dense().\n"
-        "Tham khảo comment trong hàm để biết cách query ChromaDB."
+    import chromadb
+    from index import get_embedding, CHROMA_DB_DIR
+    
+    try:
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+        collection = client.get_collection("rag_lab")
+    except Exception as e:
+        print(f"Lỗi khởi tạo ChromaDB hoặc chưa có collection: {e}")
+        return []
+
+    query_embedding = get_embedding(query)
+    
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"]
     )
+    
+    chunks = []
+    if results["documents"] and len(results["documents"]) > 0:
+        docs = results["documents"][0]
+        metas = results["metadatas"][0]
+        distances = results["distances"][0]
+        
+        for doc, meta, dist in zip(docs, metas, distances):
+            score = 1.0 - dist  # Cosine distance = 1 - similarity
+            chunks.append({
+                "text": doc,
+                "metadata": meta,
+                "score": score
+            })
+            
+    return chunks
 
 
 # =============================================================================
@@ -109,10 +138,43 @@ def retrieve_sparse(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any
         scores = bm25.get_scores(tokenized_query)
         top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
     """
-    # TODO Sprint 3: Implement BM25 search
-    # Tạm thời return empty list
-    print("[retrieve_sparse] Chưa implement — Sprint 3")
-    return []
+    import chromadb
+    from rank_bm25 import BM25Okapi
+    from index import CHROMA_DB_DIR
+    
+    try:
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+        collection = client.get_collection("rag_lab")
+    except Exception as e:
+        print(f"Lỗi khởi tạo ChromaDB hoặc chưa có collection: {e}")
+        return []
+    
+    all_data = collection.get(include=["documents", "metadatas"])
+    documents = all_data["documents"]
+    metadatas = all_data["metadatas"]
+    
+    if not documents:
+        return []
+        
+    tokenized_corpus = [doc.lower().split() for doc in documents]
+    bm25 = BM25Okapi(tokenized_corpus)
+    tokenized_query = query.lower().split()
+    
+    scores = bm25.get_scores(tokenized_query)
+    
+    top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+    
+    chunks = []
+    for idx in top_indices:
+        score = float(scores[idx])
+        if score > 0:
+            chunks.append({
+                "text": documents[idx],
+                "metadata": metadatas[idx],
+                "score": score
+            })
+            
+    return chunks
 
 
 # =============================================================================
@@ -148,10 +210,31 @@ def retrieve_hybrid(
     - Corpus có cả câu tự nhiên VÀ tên riêng, mã lỗi, điều khoản
     - Query như "Approval Matrix" khi doc đổi tên thành "Access Control SOP"
     """
-    # TODO Sprint 3: Implement hybrid RRF
-    # Tạm thời fallback về dense
-    print("[retrieve_hybrid] Chưa implement RRF — fallback về dense")
-    return retrieve_dense(query, top_k)
+    dense_results = retrieve_dense(query, top_k=top_k * 2)
+    sparse_results = retrieve_sparse(query, top_k=top_k * 2)
+    
+    rrf_scores = {}
+    chunk_map = {}
+    
+    for rank, chunk in enumerate(dense_results):
+        chunk_id = chunk["text"]
+        chunk_map[chunk_id] = chunk
+        rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + dense_weight * (1.0 / (60 + rank + 1))
+        
+    for rank, chunk in enumerate(sparse_results):
+        chunk_id = chunk["text"]
+        chunk_map[chunk_id] = chunk
+        rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + sparse_weight * (1.0 / (60 + rank + 1))
+        
+    sorted_chunks = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+    
+    final_chunks = []
+    for chunk_id, score in sorted_chunks[:top_k]:
+        chunk = chunk_map[chunk_id].copy()
+        chunk["score"] = score
+        final_chunks.append(chunk)
+        
+    return final_chunks
 
 
 # =============================================================================
@@ -275,7 +358,7 @@ def build_grounded_prompt(query: str, context_block: str) -> str:
     - Điều chỉnh tone phù hợp với use case (CS helpdesk, IT support)
     """
     prompt = f"""Answer only from the retrieved context below.
-If the context is insufficient to answer the question, say you do not know and do not make up information.
+Nếu không thấy trong context, lập tức nói 'Không đủ dữ liệu', cấm viện dẫn luật bên ngoài.
 Cite the source field (in brackets like [1]) when possible.
 Keep your answer short, clear, and factual.
 Respond in the same language as the question.
@@ -316,10 +399,20 @@ def call_llm(prompt: str) -> str:
 
     Lưu ý: Dùng temperature=0 hoặc thấp để output ổn định cho evaluation.
     """
-    raise NotImplementedError(
-        "TODO Sprint 2: Implement call_llm().\n"
-        "Chọn Option A (OpenAI) hoặc Option B (Gemini) trong TODO comment."
+    from openai import OpenAI
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY không được tìm thấy")
+        
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+        max_tokens=512,
     )
+    return response.choices[0].message.content
 
 
 def rag_answer(
@@ -393,6 +486,20 @@ def rag_answer(
 
     if verbose:
         print(f"[RAG] After select: {len(candidates)} chunks")
+
+    # Ngưỡng Similarity Threshold (Chỉ nên cài cho Dense)
+    if retrieval_mode == 'dense' and candidates:
+        all_below_threshold = all(c.get('score', 0) < 0.5 for c in candidates)
+        if all_below_threshold:
+            if verbose:
+                print("[RAG] Tất cả chunks đều dưới ngưỡng Similarity Threshold 0.5 -> Abstain")
+            return {
+                "query": query,
+                "answer": "Không đủ dữ liệu",
+                "sources": [],
+                "chunks_used": candidates,
+                "config": config,
+            }
 
     # --- Bước 3: Build context và prompt ---
     context_block = build_context_block(candidates)
