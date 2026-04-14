@@ -17,6 +17,9 @@ Gọi độc lập để test:
 """
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 WORKER_NAME = "synthesis_worker"
 
@@ -36,30 +39,36 @@ def _call_llm(messages: list) -> str:
     Gọi LLM để tổng hợp câu trả lời.
     TODO Sprint 2: Implement với OpenAI hoặc Gemini.
     """
+    # Đọc provider và model từ .env (LLM_PROVIDER, LLM_MODEL)
+    llm_model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+
     # Option A: OpenAI
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.1,  # Low temperature để grounded
-            max_tokens=500,
-        )
-        return response.choices[0].message.content
-    except Exception:
-        pass
+        if os.getenv("OPENAI_API_KEY"):
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            response = client.chat.completions.create(
+                model=llm_model,
+                messages=messages,
+                temperature=0.1,  # Low temperature để grounded
+                max_tokens=500,
+            )
+            return response.choices[0].message.content
+    except Exception as e:
+        print(f"⚠️  OpenAI call failed: {e}")
 
     # Option B: Gemini
     try:
         import google.generativeai as genai
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        combined = "\n".join([m["content"] for m in messages])
-        response = model.generate_content(combined)
-        return response.text
-    except Exception:
-        pass
+        if os.getenv("GOOGLE_API_KEY"):
+            genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+            gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+            model = genai.GenerativeModel(gemini_model)
+            combined = "\n".join([m["content"] for m in messages])
+            response = model.generate_content(combined)
+            return response.text
+    except Exception as e:
+        print(f"⚠️  Gemini call failed: {e}")
 
     # Fallback: trả về message báo lỗi (không hallucinate)
     return "[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env."
@@ -113,7 +122,36 @@ def _estimate_confidence(chunks: list, answer: str, policy_result: dict) -> floa
     exception_penalty = 0.05 * len(policy_result.get("exceptions_found", []))
 
     confidence = min(0.95, avg_score - exception_penalty)
-    return round(max(0.1, confidence), 2)
+    heuristic_score = round(max(0.1, confidence), 2)
+
+    # TODO Sprint 2: Có thể dùng LLM-as-Judge để tính confidence chính xác hơn.
+    # Implement LLM-as-Judge (optional — chỉ chạy khi OpenAI key khả dụng)
+    try:
+        from openai import OpenAI
+        if os.getenv("OPENAI_API_KEY") and chunks:
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            context_preview = " ".join([c.get("text", "")[:200] for c in chunks[:2]])
+            judge_prompt = (
+                f"Dựa trên context sau, đánh giá độ tin cậy của câu trả lời từ 0.0 đến 1.0.\n"
+                f"Context: {context_preview}\n"
+                f"Câu trả lời: {answer[:300]}\n"
+                f"Chỉ trả về một số thập phân từ 0.0 đến 1.0, không giải thích gì thêm."
+            )
+            resp = client.chat.completions.create(
+                model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+                messages=[{"role": "user", "content": judge_prompt}],
+                temperature=0,
+                max_tokens=10,
+            )
+            raw = resp.choices[0].message.content.strip()
+            llm_score = float(raw)
+            # Trung bình heuristic và LLM-as-Judge để balance
+            return round((heuristic_score + llm_score) / 2, 2)
+    except Exception:
+        # Nếu LLM-as-Judge thất bại → fallback về heuristic
+        pass
+
+    return heuristic_score
 
 
 def synthesize(task: str, chunks: list, policy_result: dict) -> dict:
