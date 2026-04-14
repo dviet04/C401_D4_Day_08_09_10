@@ -30,8 +30,12 @@ Chạy thử:
 
 import os
 import json
+import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 # ─────────────────────────────────────────────
@@ -125,6 +129,88 @@ TOOL_SCHEMAS = {
             },
         },
     },
+    "get_policy_exceptions": {
+        "name": "get_policy_exceptions",
+        "description": "Tra cứu danh sách ngoại lệ (exceptions) của một chính sách (policy). VD: refund, access.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "policy_type": {"type": "string", "description": "Loại policy: 'refund', 'access', 'sla'"},
+            },
+            "required": ["policy_type"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "policy_type": {"type": "string"},
+                "exceptions": {"type": "array"},
+                "source": {"type": "string"},
+            },
+        },
+    },
+    "search_by_source": {
+        "name": "search_by_source",
+        "description": "Lọc và truy xuất toàn bộ chunks từ một tài liệu nguồn cụ thể trong Knowledge Base. Dùng khi đã biết rõ tài liệu cần tra cứu.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "description": "Tên file nguồn (VD: 'policy/refund-v4.pdf', 'support/sla-p1-2026.pdf')"},
+                "keyword": {"type": "string", "description": "(optional) Từ khoá để filter thêm trong tài liệu đó", "default": ""},
+            },
+            "required": ["source"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string"},
+                "chunks": {"type": "array"},
+                "total_found": {"type": "integer"},
+            },
+        },
+    },
+    "calculate_sla_deadline": {
+        "name": "calculate_sla_deadline",
+        "description": "Tính toán SLA deadline dựa trên priority ticket và thời điểm tạo. Trả về thời hạn phản hồi, xử lý, và escalation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "priority": {"type": "string", "description": "Priority ticket: P1, P2, P3, P4"},
+                "created_at": {"type": "string", "description": "ISO datetime khi tạo ticket (VD: 2026-04-13T22:47:00). Mặc định: now", "default": ""},
+            },
+            "required": ["priority"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "priority": {"type": "string"},
+                "first_response_deadline": {"type": "string"},
+                "resolution_deadline": {"type": "string"},
+                "escalation_after": {"type": "string"},
+                "sla_minutes": {"type": "object"},
+            },
+        },
+    },
+    "get_escalation_contacts": {
+        "name": "get_escalation_contacts",
+        "description": "Tra cứu danh sách liên hệ escalation theo priority ticket. Bao gồm on-call engineer, manager, và kênh thông báo.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "priority": {"type": "string", "description": "Priority: P1, P2, P3"},
+            },
+            "required": ["priority"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "priority": {"type": "string"},
+                "on_call_engineer": {"type": "string"},
+                "escalation_manager": {"type": "string"},
+                "notification_channels": {"type": "array"},
+                "escalation_timeout_minutes": {"type": "integer"},
+            },
+        },
+    },
 }
 
 
@@ -141,8 +227,11 @@ def tool_search_kb(query: str, top_k: int = 3) -> dict:
     """
     try:
         # Tái dùng retrieval logic từ workers/retrieval.py
-        import sys
-        sys.path.insert(0, os.path.dirname(__file__))
+        # Dùng đường dẫn tuyệt đối dựa trên __file__ để đảm bảo import đúng
+        # bất kể CWD đang ở đâu (lab/, workers/, v.v.)
+        _workers_dir = os.path.dirname(os.path.abspath(__file__))
+        if _workers_dir not in sys.path:
+            sys.path.insert(0, _workers_dir)
         from workers.retrieval import retrieve_dense
         chunks = retrieve_dense(query, top_k=top_k)
         sources = list({c["source"] for c in chunks})
@@ -275,6 +364,217 @@ def tool_create_ticket(priority: str, title: str, description: str = "") -> dict
     return ticket
 
 
+# Mock policy exception database
+MOCK_POLICY_EXCEPTIONS = {
+    "refund": {
+        "policy_type": "refund",
+        "source": "policy/refund-v4.pdf",
+        "exceptions": [
+            {"id": "flash_sale_exception", "rule": "Đơn hàng Flash Sale không được hoàn tiền (Điều 3, chính sách v4)."},
+            {"id": "digital_product_exception", "rule": "Sản phẩm kỹ thuật số (license key, subscription) không được hoàn tiền (Điều 3)."},
+            {"id": "activated_exception", "rule": "Sản phẩm đã kích hoạt hoặc đăng ký tài khoản không được hoàn tiền (Điều 3)."},
+            {"id": "old_order_v3", "rule": "Đơn hàng đặt trước 01/02/2026 áp dụng chính sách v3 (không có trong tài liệu hiện tại)."},
+        ],
+    },
+    "access": {
+        "policy_type": "access",
+        "source": "it/access-control-sop.md",
+        "exceptions": [
+            {"id": "contractor_no_admin", "rule": "Contractor không được cấp Level 3 (Admin) Access."},
+            {"id": "emergency_level2_ok", "rule": "Level 2 có thể cấp tạm thời trong emergency với approval đồng thời của Line Manager và IT Admin on-call."},
+            {"id": "no_emergency_level3", "rule": "Level 3 không có emergency bypass, buộc phải follow quy trình chuẩn."},
+        ],
+    },
+    "sla": {
+        "policy_type": "sla",
+        "source": "support/sla-p1-2026.pdf",
+        "exceptions": [
+            {"id": "force_majeure", "rule": "SLA không áp dụng trong trường hợp force majeure (thiên tai, mất điện trung tâm dữ liệu)."},
+            {"id": "maintenance_window", "rule": "SLA không tính trong maintenance window đã thông báo trước 48 giờ."},
+        ],
+    },
+}
+
+
+def tool_get_policy_exceptions(policy_type: str) -> dict:
+    """
+    Tra cứu danh sách ngoại lệ (exceptions) của một policy.
+    Dùng để làm rõ những trường hợp không áp dụng policy tiêu chuẩn.
+    """
+    policy_type_normalized = policy_type.lower().strip()
+    result = MOCK_POLICY_EXCEPTIONS.get(policy_type_normalized)
+    if result:
+        return result
+    # Không tìm thấy policy type
+    return {
+        "error": f"Policy type '{policy_type}' không tìm thấy.",
+        "available_policy_types": list(MOCK_POLICY_EXCEPTIONS.keys()),
+    }
+
+
+def tool_search_by_source(source: str, keyword: str = "") -> dict:
+    """
+    Lọc chunks từ một tài liệu nguồn cụ thể trong ChromaDB.
+    Dùng khi đã biết rõ file cần tra cứu (VD: tất cả nội dung từ refund policy).
+
+    Kết hợp: lấy chunks từ retrieval rồi filter theo source.
+    """
+    try:
+        # Dùng đường dẫn tuyệt đối dựa trên __file__ để đảm bảo import đúng
+        _workers_dir = os.path.dirname(os.path.abspath(__file__))
+        if _workers_dir not in sys.path:
+            sys.path.insert(0, _workers_dir)
+        from workers.retrieval import retrieve_dense
+
+        # Query rộng để lấy nhiều chunks, rồi filter theo source
+        query = keyword if keyword else source
+        all_chunks = retrieve_dense(query, top_k=10)
+
+        # Filter chunks thuộc đúng source
+        matched = [c for c in all_chunks if source.lower() in c.get("source", "").lower()]
+
+        # Nếu keyword, filter thêm theo keyword trong text
+        if keyword:
+            matched = [c for c in matched if keyword.lower() in c.get("text", "").lower()] or matched
+
+        return {
+            "source": source,
+            "chunks": matched,
+            "total_found": len(matched),
+        }
+    except Exception as e:
+        return {
+            "error": f"search_by_source failed: {e}",
+            "source": source,
+            "chunks": [],
+            "total_found": 0,
+        }
+
+
+# SLA config theo priority (chuẩn theo sla_p1_2026.txt)
+SLA_CONFIG = {
+    "P1": {
+        "first_response_minutes": 15,
+        "resolution_minutes": 240,    # 4 giờ
+        "escalation_minutes": 10,     # escalate nếu không phản hồi sau 10 phút
+    },
+    "P2": {
+        "first_response_minutes": 60,
+        "resolution_minutes": 480,    # 8 giờ
+        "escalation_minutes": 30,
+    },
+    "P3": {
+        "first_response_minutes": 240,
+        "resolution_minutes": 1440,   # 24 giờ
+        "escalation_minutes": 120,
+    },
+    "P4": {
+        "first_response_minutes": 480,
+        "resolution_minutes": 4320,   # 3 ngày
+        "escalation_minutes": 480,
+    },
+}
+
+
+def tool_calculate_sla_deadline(priority: str, created_at: str = "") -> dict:
+    """
+    Tính SLA deadline dựa trên priority và thời điểm tạo ticket.
+    Trả về: first_response_deadline, resolution_deadline, escalation_after.
+    """
+    from datetime import timedelta
+
+    priority_upper = priority.upper()
+    config = SLA_CONFIG.get(priority_upper)
+    if not config:
+        return {
+            "error": f"Priority '{priority}' không hợp lệ. Hợp lệ: P1, P2, P3, P4.",
+            "available_priorities": list(SLA_CONFIG.keys()),
+        }
+
+    # Parse hoặc dùng now
+    try:
+        base_time = datetime.fromisoformat(created_at) if created_at else datetime.now()
+    except ValueError:
+        base_time = datetime.now()
+
+    first_response = base_time + timedelta(minutes=config["first_response_minutes"])
+    resolution = base_time + timedelta(minutes=config["resolution_minutes"])
+    escalation = base_time + timedelta(minutes=config["escalation_minutes"])
+
+    return {
+        "priority": priority_upper,
+        "created_at": base_time.isoformat(),
+        "first_response_deadline": first_response.isoformat(),
+        "resolution_deadline": resolution.isoformat(),
+        "escalation_after": escalation.isoformat(),
+        "sla_minutes": {
+            "first_response": config["first_response_minutes"],
+            "resolution": config["resolution_minutes"],
+            "escalation_trigger": config["escalation_minutes"],
+        },
+        "source": "support/sla-p1-2026.pdf",
+    }
+
+
+# Mock escalation contacts theo priority
+ESCALATION_CONTACTS = {
+    "P1": {
+        "priority": "P1",
+        "on_call_engineer": "oncall-primary@company.internal",
+        "escalation_manager": "incident-manager@company.internal",
+        "notification_channels": [
+            "slack:#incident-p1",
+            "pagerduty:oncall",
+            "email:incident@company.internal",
+            "sms:+84-xxx-xxx-xxx",
+        ],
+        "escalation_timeout_minutes": 10,
+        "note": "P1 yêu cầu escalation tự động sau 10 phút không phản hồi.",
+        "source": "support/sla-p1-2026.pdf",
+    },
+    "P2": {
+        "priority": "P2",
+        "on_call_engineer": "support-team@company.internal",
+        "escalation_manager": "support-lead@company.internal",
+        "notification_channels": [
+            "slack:#support-queue",
+            "email:support@company.internal",
+        ],
+        "escalation_timeout_minutes": 30,
+        "note": "P2 escalate lên Support Lead sau 30 phút không xử lý.",
+        "source": "support/sla-p1-2026.pdf",
+    },
+    "P3": {
+        "priority": "P3",
+        "on_call_engineer": "support-team@company.internal",
+        "escalation_manager": "support-lead@company.internal",
+        "notification_channels": [
+            "slack:#support-queue",
+            "email:support@company.internal",
+        ],
+        "escalation_timeout_minutes": 120,
+        "note": "P3 xử lý theo queue bình thường, escalate sau 2 giờ.",
+        "source": "support/sla-p1-2026.pdf",
+    },
+}
+
+
+def tool_get_escalation_contacts(priority: str) -> dict:
+    """
+    Tra cứu thông tin liên hệ escalation theo priority.
+    Bao gồm on-call engineer, manager, và kênh thông báo tương ứng.
+    """
+    priority_upper = priority.upper()
+    contacts = ESCALATION_CONTACTS.get(priority_upper)
+    if contacts:
+        return contacts
+    # Không tìm thấy priority
+    return {
+        "error": f"Priority '{priority}' không có cấu hình escalation. Hỗ trợ: P1, P2, P3.",
+        "available_priorities": list(ESCALATION_CONTACTS.keys()),
+    }
+
+
 # ─────────────────────────────────────────────
 # Dispatch Layer — MCP server interface
 # ─────────────────────────────────────────────
@@ -284,6 +584,10 @@ TOOL_REGISTRY = {
     "get_ticket_info": tool_get_ticket_info,
     "check_access_permission": tool_check_access_permission,
     "create_ticket": tool_create_ticket,
+    "get_policy_exceptions": tool_get_policy_exceptions,
+    "search_by_source": tool_search_by_source,
+    "calculate_sla_deadline": tool_calculate_sla_deadline,
+    "get_escalation_contacts": tool_get_escalation_contacts,
 }
 
 
@@ -374,5 +678,41 @@ if __name__ == "__main__":
     err = dispatch_tool("nonexistent_tool", {})
     print(f"  Error: {err.get('error')}")
 
+    # 6. Test get_policy_exceptions
+    print("\n📜 Test: get_policy_exceptions (refund)")
+    excs = dispatch_tool("get_policy_exceptions", {"policy_type": "refund"})
+    print(f"  Source: {excs.get('source')}")
+    for ex in excs.get("exceptions", [])[:2]:
+        print(f"  [{ex['id']}] {ex['rule'][:70]}")
+
+    # 7. Test search_by_source
+    print("\n📂 Test: search_by_source (refund-v4.pdf)")
+    src_result = dispatch_tool("search_by_source", {"source": "refund", "keyword": "hoàn tiền"})
+    print(f"  Total found: {src_result.get('total_found')}")
+    for c in src_result.get("chunks", [])[:2]:
+        print(f"  [{c.get('score', '?'):.3f}] {c.get('text', '')[:70]}...")
+
+    # 8. Test calculate_sla_deadline
+    print("\n⏱️  Test: calculate_sla_deadline (P1, created now)")
+    sla = dispatch_tool("calculate_sla_deadline", {"priority": "P1", "created_at": "2026-04-13T22:47:00"})
+    print(f"  Priority: {sla.get('priority')}")
+    print(f"  First Response: {sla.get('first_response_deadline')}")
+    print(f"  Resolution: {sla.get('resolution_deadline')}")
+    print(f"  Escalate after: {sla.get('escalation_after')}")
+
+    # 9. Test get_escalation_contacts
+    print("\n📞 Test: get_escalation_contacts (P1)")
+    contacts = dispatch_tool("get_escalation_contacts", {"priority": "P1"})
+    print(f"  On-call: {contacts.get('on_call_engineer')}")
+    print(f"  Channels: {contacts.get('notification_channels')}")
+    print(f"  Escalate after: {contacts.get('escalation_timeout_minutes')} phút")
+
     print("\n✅ MCP server test done.")
-    print("\nTODO Sprint 3: Implement HTTP server nếu muốn bonus +2.")
+    # TODO Sprint 3: Implement HTTP server nếu muốn bonus +2.
+    # Phương án dùng FastAPI:
+    # from fastapi import FastAPI
+    # app = FastAPI()
+    # @app.get("/tools") → list_tools()
+    # @app.post("/tools/{tool_name}") → dispatch_tool(tool_name, body)
+    # uvicorn mcp_server:app --host 0.0.0.0 --port 8000
+
