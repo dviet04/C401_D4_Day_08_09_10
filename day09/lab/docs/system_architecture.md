@@ -1,28 +1,22 @@
 # System Architecture — Lab Day 09
 
-**Nhóm:** ___________  
-**Ngày:** ___________  
+**Nhóm:** Nhóm AI20K  
+**Ngày:** 14/04/2026  
 **Version:** 1.0
 
 ---
 
 ## 1. Tổng quan kiến trúc
 
-> Mô tả ngắn hệ thống của nhóm: chọn pattern gì, gồm những thành phần nào.
-
 **Pattern đã chọn:** Supervisor-Worker  
 **Lý do chọn pattern này (thay vì single agent):**
 
-_________________
+Day 08 dùng single-agent pipeline (monolith): retrieve → generate trong 1 hàm. Khi pipeline trả lời sai, không rõ lỗi nằm ở retrieval, policy check, hay generation. Supervisor-Worker tách rõ trách nhiệm từng node, cho phép test độc lập từng worker và debug nhanh qua trace.
 
 ---
 
 ## 2. Sơ đồ Pipeline
 
-> Vẽ sơ đồ pipeline dưới dạng text, Mermaid diagram, hoặc ASCII art.
-> Yêu cầu tối thiểu: thể hiện rõ luồng từ input → supervisor → workers → output.
-
-**Ví dụ (ASCII art):**
 ```
 User Request
      │
@@ -33,26 +27,23 @@ User Request
        │
    [route_decision]
        │
-  ┌────┴────────────────────┐
-  │                         │
-  ▼                         ▼
-Retrieval Worker     Policy Tool Worker
-  (evidence)           (policy check + MCP)
-  │                         │
-  └─────────┬───────────────┘
-            │
-            ▼
-      Synthesis Worker
-        (answer + cite)
-            │
-            ▼
-         Output
-```
-
-**Sơ đồ thực tế của nhóm:**
-
-```
-[NHÓM ĐIỀN VÀO ĐÂY]
+  ┌────┴────────────────────┐──────────────┐
+  │                         │              │
+  ▼                         ▼              ▼
+Retrieval Worker     Policy Tool Worker   Human Review
+  (evidence)           (policy + MCP)      (HITL)
+  │                    │    │              │
+  │                    │    ▼              │
+  │                    │  MCP Server       │
+  │                    │  (4 tools)        │
+  └────────┬───────────┘──────────────────-┘
+           │
+           ▼
+    Synthesis Worker
+    (LLM + confidence)
+           │
+           ▼
+       Final Answer
 ```
 
 ---
@@ -60,89 +51,69 @@ Retrieval Worker     Policy Tool Worker
 ## 3. Vai trò từng thành phần
 
 ### Supervisor (`graph.py`)
-
-| Thuộc tính | Mô tả |
-|-----------|-------|
-| **Nhiệm vụ** | ___________________ |
-| **Input** | ___________________ |
-| **Output** | supervisor_route, route_reason, risk_high, needs_tool |
-| **Routing logic** | ___________________ |
-| **HITL condition** | ___________________ |
+- **Chức năng:** Phân tích task bằng keyword matching, quyết định route sang worker phù hợp
+- **Input:** `task` (câu hỏi từ user)
+- **Output:** `supervisor_route`, `route_reason`, `risk_high`, `needs_tool`
+- **Logic:** 3 danh sách keywords (POLICY_KEYWORDS, RETRIEVAL_KEYWORDS, RISK_KEYWORDS)
 
 ### Retrieval Worker (`workers/retrieval.py`)
-
-| Thuộc tính | Mô tả |
-|-----------|-------|
-| **Nhiệm vụ** | ___________________ |
-| **Embedding model** | ___________________ |
-| **Top-k** | ___________________ |
-| **Stateless?** | Yes / No |
+- **Chức năng:** Truy xuất top-k chunks từ ChromaDB (Day 08 collection `rag_lab`)
+- **Input:** `task`
+- **Output:** `retrieved_chunks` (list), `retrieved_sources` (list)
+- **Embedding:** OpenAI `text-embedding-3-small` (dim=1536) để khớp Day 08 index
 
 ### Policy Tool Worker (`workers/policy_tool.py`)
-
-| Thuộc tính | Mô tả |
-|-----------|-------|
-| **Nhiệm vụ** | ___________________ |
-| **MCP tools gọi** | ___________________ |
-| **Exception cases xử lý** | ___________________ |
+- **Chức năng:** Kiểm tra ngoại lệ policy (Flash Sale, digital product) + gọi MCP tools
+- **Input:** `task`, `retrieved_chunks`, `needs_tool`
+- **Output:** `policy_result`, `mcp_tools_used`
+- **MCP tools:** `search_kb`, `get_ticket_info`, `check_access_permission`, `create_ticket`
 
 ### Synthesis Worker (`workers/synthesis.py`)
+- **Chức năng:** Tổng hợp câu trả lời từ chunks + policy_result qua LLM (GPT-4o-mini)
+- **Input:** `task`, `retrieved_chunks`, `policy_result`
+- **Output:** `final_answer`, `sources`, `confidence`
+- **Confidence:** Weighted average chunk scores + multi-source bonus + LLM reasoning boost
 
-| Thuộc tính | Mô tả |
-|-----------|-------|
-| **LLM model** | ___________________ |
-| **Temperature** | ___________________ |
-| **Grounding strategy** | ___________________ |
-| **Abstain condition** | ___________________ |
+### Human Review Node (`graph.py`)
+- **Chức năng:** HITL placeholder — auto-approve trong lab, ghi log `hitl_triggered=True`
+- **Trigger:** Khi task chứa unknown error code (`ERR-xxx`) không match keyword nào
 
 ### MCP Server (`mcp_server.py`)
-
-| Tool | Input | Output |
-|------|-------|--------|
-| search_kb | query, top_k | chunks, sources |
-| get_ticket_info | ticket_id | ticket details |
-| check_access_permission | access_level, requester_role | can_grant, approvers |
-| ___________________ | ___________________ | ___________________ |
+- **Chức năng:** Mock MCP server cung cấp 4 tools qua `dispatch_tool()` interface
+- **Tools:** `search_kb`, `get_ticket_info`, `check_access_permission`, `create_ticket`
 
 ---
 
-## 4. Shared State Schema
+## 4. Data Flow
 
-> Liệt kê các fields trong AgentState và ý nghĩa của từng field.
+```
+AgentState (TypedDict) — shared state xuyên suốt pipeline:
 
-| Field | Type | Mô tả | Ai đọc/ghi |
-|-------|------|-------|-----------|
-| task | str | Câu hỏi đầu vào | supervisor đọc |
-| supervisor_route | str | Worker được chọn | supervisor ghi |
-| route_reason | str | Lý do route | supervisor ghi |
-| retrieved_chunks | list | Evidence từ retrieval | retrieval ghi, synthesis đọc |
-| policy_result | dict | Kết quả kiểm tra policy | policy_tool ghi, synthesis đọc |
-| mcp_tools_used | list | Tool calls đã thực hiện | policy_tool ghi |
-| final_answer | str | Câu trả lời cuối | synthesis ghi |
-| confidence | float | Mức tin cậy | synthesis ghi |
-| ___________________ | ___________________ | ___________________ | ___________________ |
+task ──→ supervisor_node() ──→ route_decision()
+                                     │
+                            ┌────────┴────────┐
+                            ▼                 ▼
+                    retrieval_run()    policy_tool_run()
+                            │                 │
+                            └────────┬────────┘
+                                     ▼
+                            synthesis_run()
+                                     │
+                                     ▼
+                            final_answer + confidence
+```
 
----
-
-## 5. Lý do chọn Supervisor-Worker so với Single Agent (Day 08)
-
-| Tiêu chí | Single Agent (Day 08) | Supervisor-Worker (Day 09) |
-|----------|----------------------|--------------------------|
-| Debug khi sai | Khó — không rõ lỗi ở đâu | Dễ hơn — test từng worker độc lập |
-| Thêm capability mới | Phải sửa toàn prompt | Thêm worker/MCP tool riêng |
-| Routing visibility | Không có | Có route_reason trong trace |
-| ___________________ | ___________________ | ___________________ |
-
-**Nhóm điền thêm quan sát từ thực tế lab:**
-
-_________________
+Mỗi worker đọc/ghi đúng field của mình theo `contracts/worker_contracts.yaml`.
 
 ---
 
-## 6. Giới hạn và điểm cần cải tiến
+## 5. Ranh giới Supervisor vs Workers
 
-> Nhóm mô tả những điểm hạn chế của kiến trúc hiện tại.
-
-1. ___________________
-2. ___________________
-3. ___________________
+| Trách nhiệm | Supervisor | Workers |
+|---|---|---|
+| Quyết định route | ✓ | ✗ |
+| Truy xuất dữ liệu | ✗ | ✓ (retrieval) |
+| Kiểm tra policy | ✗ | ✓ (policy_tool) |
+| Gọi LLM | ✗ | ✓ (synthesis) |
+| Gọi MCP tools | ✗ | ✓ (policy_tool) |
+| Ghi trace | ✓ (route_reason) | ✓ (worker_io_logs) |
