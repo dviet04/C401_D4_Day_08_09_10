@@ -85,6 +85,32 @@ def _call_mcp_tool(tool_name: str, tool_input: dict) -> dict:
             "error": {"code": "MCP_CALL_FAILED", "reason": str(e)},
             "timestamp": datetime.now().isoformat(),
         }
+def _extract_access_level(task: str) -> int | None:
+    task_lower = task.lower()
+    if "level 3" in task_lower or "admin access" in task_lower:
+        return 3
+    if "level 2" in task_lower:
+        return 2
+    if "level 1" in task_lower:
+        return 1
+    return None
+
+
+def _extract_requester_role(task: str) -> str:
+    task_lower = task.lower()
+    if "contractor" in task_lower:
+        return "contractor"
+    if "employee" in task_lower or "nhân viên" in task_lower:
+        return "employee"
+    return "unknown"
+
+
+def _extract_priority(task: str) -> str:
+    task_upper = task.upper()
+    for p in ["P1", "P2", "P3", "P4"]:
+        if p in task_upper:
+            return p
+    return "P3"
 # ─────────────────────────────────────────────
 # Policy Analysis Logic
 # ─────────────────────────────────────────────
@@ -231,6 +257,28 @@ def run(state: dict) -> dict:
 
             if mcp_result.get("output") and not mcp_result.get("error"):
                 state["ticket_info"] = mcp_result["output"]
+        
+            if needs_tool and any(kw in task.lower() for kw in [
+                "access", "level 1", "level 2", "level 3", "admin access", "contractor", "phê duyệt"
+            ]):
+                access_level = _extract_access_level(task)
+                requester_role = _extract_requester_role(task)
+                is_emergency = any(kw in task.lower() for kw in ["emergency", "khẩn cấp", "p1", "2am"])
+
+                if access_level is not None:
+                    mcp_result = _call_mcp_tool(
+                        "check_access_permission",
+                        {
+                            "access_level": access_level,
+                            "requester_role": requester_role,
+                            "is_emergency": is_emergency,
+                        }
+                    )
+                    state["mcp_tools_used"].append(mcp_result)
+                    state["history"].append(f"[{WORKER_NAME}] called MCP check_access_permission")
+
+                    if mcp_result.get("output") and not mcp_result.get("error"):
+                        state["access_check"] = mcp_result["output"]
 
         worker_io["output"] = {
             "policy_applies": policy_result["policy_applies"],
@@ -240,6 +288,7 @@ def run(state: dict) -> dict:
             "mcp_calls": len(state["mcp_tools_used"]),
             "mcp_tool_names": [x.get("tool") for x in state.get("mcp_tools_used", [])],
             "has_ticket_info": "ticket_info" in state,
+            "has_access_check": "access_check" in state,
         }
         state["history"].append(
             f"[{WORKER_NAME}] policy_applies={policy_result['policy_applies']}, "

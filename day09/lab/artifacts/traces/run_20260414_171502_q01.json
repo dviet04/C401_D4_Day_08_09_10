@@ -10,12 +10,12 @@
       "source": "support/sla-p1-2026.pdf",
       "score": 0.618,
       "metadata": {
-        "department": "IT",
-        "access": "internal",
-        "section_number": "2",
-        "effective_date": "2026-01-15",
         "section": "Phần 2: SLA theo mức độ ưu tiên",
-        "source": "support/sla-p1-2026.pdf"
+        "department": "IT",
+        "effective_date": "2026-01-15",
+        "source": "support/sla-p1-2026.pdf",
+        "section_number": "2",
+        "access": "internal"
       }
     },
     {
@@ -23,12 +23,12 @@
       "source": "support/sla-p1-2026.pdf",
       "score": 0.4849,
       "metadata": {
-        "access": "internal",
-        "source": "support/sla-p1-2026.pdf",
         "section": "Phần 3: Quy trình xử lý sự cố P1",
-        "department": "IT",
+        "section_number": "3",
         "effective_date": "2026-01-15",
-        "section_number": "3"
+        "source": "support/sla-p1-2026.pdf",
+        "access": "internal",
+        "department": "IT"
       }
     },
     {
@@ -36,11 +36,11 @@
       "source": "policy/refund-v4.pdf",
       "score": 0.4683,
       "metadata": {
-        "source": "policy/refund-v4.pdf",
-        "access": "internal",
         "effective_date": "2026-02-01",
+        "source": "policy/refund-v4.pdf",
         "section": "Điều 4: Quy trình xử lý yêu cầu hoàn tiền",
-        "department": "CS"
+        "department": "CS",
+        "access": "internal"
       }
     }
   ],
@@ -79,32 +79,32 @@
           "policy/refund-v4.pdf",
           "support/sla-p1-2026.pdf"
         ],
-        "confidence": 0.56
+        "confidence": 0.61
       },
       "error": null
     }
   ],
-  "final_answer": "SLA xử lý ticket P1 như sau:\n\n1. **Phản hồi ban đầu**: 15 phút kể từ khi ticket được tạo.\n2. **Xử lý và khắc phục**: 4 giờ.\n3. **Escalation**: Tự động escalate lên Senior Engineer nếu không có phản hồi trong 10 phút.\n4. **Thông báo stakeholder**: Ngay khi nhận ticket, update mỗi 30 phút cho đến khi resolve [1].",
+  "final_answer": "SLA xử lý ticket P1 như sau:\n\n1. **Phản hồi ban đầu**: 15 phút kể từ khi ticket được tạo.\n2. **Xử lý và khắc phục**: 4 giờ.\n3. **Escalation**: Tự động escalate lên Senior Engineer nếu không có phản hồi trong 10 phút.\n4. **Thông báo stakeholder**: Ngay khi nhận ticket, update mỗi 30 phút cho đến khi resolve. [1]",
   "sources": [
     "policy/refund-v4.pdf",
     "support/sla-p1-2026.pdf"
   ],
-  "confidence": 0.56,
+  "confidence": 0.61,
   "history": [
     "[supervisor] received: SLA xử lý ticket P1 là bao lâu?",
     "[supervisor] → route=retrieval_worker | reason=task contains retrieval keyword: ['p1', 'sla', 'ticket']",
     "[retrieval_worker] starting...",
     "[retrieval_worker] retrieved 3 new chunks from ['policy/refund-v4.pdf', 'support/sla-p1-2026.pdf']",
     "[synthesis_worker] starting...",
-    "[synthesis_worker] answer generated, confidence=0.56, sources=['policy/refund-v4.pdf', 'support/sla-p1-2026.pdf']",
-    "[graph] completed in 7286ms | workers=['retrieval_worker', 'synthesis_worker'] | confidence=0.56"
+    "[synthesis_worker] answer generated, confidence=0.61, sources=['policy/refund-v4.pdf', 'support/sla-p1-2026.pdf']",
+    "[graph] completed in 9350ms | workers=['retrieval_worker', 'synthesis_worker'] | confidence=0.61"
   ],
   "workers_called": [
     "retrieval_worker",
     "synthesis_worker"
   ],
   "supervisor_route": "retrieval_worker",
-  "latency_ms": 7286,
-  "run_id": "run_20260414_165834",
-  "question_id": "q_test_1"
+  "latency_ms": 9350,
+  "run_id": "run_20260414_171502",
+  "question_id": "q01"
 }

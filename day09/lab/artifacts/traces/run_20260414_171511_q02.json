@@ -1,6 +1,6 @@
 {
-  "task": "Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — được không?",
-  "route_reason": "task contains policy/access keyword: ['hoàn tiền', 'flash sale'] -> route to policy_tool_worker -> use MCP tools",
+  "task": "Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?",
+  "route_reason": "task contains policy/access keyword: ['hoàn tiền']",
   "risk_high": false,
   "needs_tool": true,
   "hitl_triggered": false,
@@ -8,36 +8,36 @@
     {
       "text": "Khách hàng được quyền yêu cầu hoàn tiền khi đáp ứng đủ các điều kiện sau:\n- Sản phẩm bị lỗi do nhà sản xuất, không phải do người dùng.\n- Yêu cầu được gửi trong vòng 7 ngày làm việc kể từ thời điểm xác nhận đơn hàng.\n- Đơn hàng chưa được sử dụng hoặc chưa bị mở seal.",
       "source": "policy/refund-v4.pdf",
-      "score": 0.663,
+      "score": 0.605,
       "metadata": {
-        "effective_date": "2026-02-01",
-        "section": "Điều 2: Điều kiện được hoàn tiền",
         "department": "CS",
+        "effective_date": "2026-02-01",
         "access": "internal",
-        "source": "policy/refund-v4.pdf"
+        "source": "policy/refund-v4.pdf",
+        "section": "Điều 2: Điều kiện được hoàn tiền"
       }
     },
     {
       "text": "Hoàn tiền — Điều kiện áp dụng:\nYêu cầu được gửi trong vòng 7 ngày kể từ thời điểm xác nhận đơn hàng.\n\nNgoại lệ không được hoàn tiền:\n- Sản phẩm thuộc danh mục hàng kỹ thuật số (license key, subscription).\n- Đơn hàng đã áp dụng mã giảm giá đặc biệt theo chương trình khuyến mãi Flash Sale.\n- Sản phẩm đã được kích hoạt hoặc đăng ký tài khoản.",
       "source": "policy/refund-v4.pdf",
-      "score": 0.6509,
+      "score": 0.5274,
       "metadata": {
-        "effective_date": "2026-02-01",
-        "source": "policy/refund-v4.pdf",
         "access": "internal",
-        "department": "CS",
-        "section": "Điều 3: Điều kiện áp dụng và ngoại lệ"
+        "effective_date": "2026-02-01",
+        "section": "Điều 3: Điều kiện áp dụng và ngoại lệ",
+        "source": "policy/refund-v4.pdf",
+        "department": "CS"
       }
     },
     {
       "text": "Bước 1: Khách hàng gửi yêu cầu qua hệ thống ticket nội bộ với category \"Refund Request\".\nBước 2: CS Agent xem xét trong vòng 1 ngày làm việc và xác nhận điều kiện đủ điều kiện.\nBước 3: Nếu đủ điều kiện, chuyển yêu cầu sang Finance Team để xử lý hoàn tiền.\nBước 4: Finance Team xử lý trong 3-5 ngày làm việc và thông báo kết quả cho khách hàng.",
       "source": "policy/refund-v4.pdf",
-      "score": 0.5045,
+      "score": 0.5142,
       "metadata": {
-        "source": "policy/refund-v4.pdf",
-        "effective_date": "2026-02-01",
-        "department": "CS",
         "section": "Điều 4: Quy trình xử lý yêu cầu hoàn tiền",
+        "source": "policy/refund-v4.pdf",
+        "department": "CS",
+        "effective_date": "2026-02-01",
         "access": "internal"
       }
     }
@@ -66,7 +66,7 @@
     {
       "worker": "retrieval_worker",
       "input": {
-        "task": "Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — được không?",
+        "task": "Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?",
         "top_k": 3
       },
       "output": {
@@ -80,7 +80,7 @@
     {
       "worker": "policy_tool_worker",
       "input": {
-        "task": "Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — được không?",
+        "task": "Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?",
         "chunks_count": 3,
         "needs_tool": true
       },
@@ -100,35 +100,35 @@
     {
       "worker": "synthesis_worker",
       "input": {
-        "task": "Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — được không?",
+        "task": "Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?",
         "chunks_count": 3,
         "has_policy": true
       },
       "output": {
-        "answer_length": 205,
+        "answer_length": 408,
         "sources": [
           "policy/refund-v4.pdf"
         ],
-        "confidence": 0.38
+        "confidence": 0.7
       },
       "error": null
     }
   ],
-  "final_answer": "Không, khách hàng không thể yêu cầu hoàn tiền cho sản phẩm lỗi trong trường hợp Flash Sale. Theo chính sách, đơn hàng Flash Sale không được hoàn tiền, ngay cả khi sản phẩm bị lỗi do nhà sản xuất [1][2][3].",
+  "final_answer": "Khách hàng có thể yêu cầu hoàn tiền trong vòng 7 ngày làm việc kể từ thời điểm xác nhận đơn hàng, với điều kiện sản phẩm bị lỗi do nhà sản xuất và chưa được sử dụng hoặc mở seal [1]. \n\nNgoại lệ không được hoàn tiền bao gồm:\n- Sản phẩm thuộc danh mục hàng kỹ thuật số.\n- Đơn hàng đã áp dụng mã giảm giá đặc biệt theo chương trình khuyến mãi Flash Sale.\n- Sản phẩm đã được kích hoạt hoặc đăng ký tài khoản [2].",
   "sources": [
     "policy/refund-v4.pdf"
   ],
-  "confidence": 0.38,
+  "confidence": 0.7,
   "history": [
-    "[supervisor] received: Khách hàng Flash Sale yêu cầu hoàn tiền vì sản phẩm lỗi — được không?",
-    "[supervisor] → route=policy_tool_worker | reason=task contains policy/access keyword: ['hoàn tiền', 'flash sale'] -> route to policy_tool_worker -> use MCP tools",
+    "[supervisor] received: Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?",
+    "[supervisor] → route=policy_tool_worker | reason=task contains policy/access keyword: ['hoàn tiền']",
     "[policy_tool_worker] starting...",
     "[policy_tool_worker] no chunks yet — calling retrieval first",
     "[retrieval_worker] retrieved 3 new chunks from ['policy/refund-v4.pdf']",
     "[policy_tool_worker] policy_applies=False, exceptions=1",
     "[synthesis_worker] starting...",
-    "[synthesis_worker] answer generated, confidence=0.38, sources=['policy/refund-v4.pdf']",
-    "[graph] completed in 3195ms | workers=['retrieval_worker', 'policy_tool_worker', 'synthesis_worker'] | confidence=0.38"
+    "[synthesis_worker] answer generated, confidence=0.7, sources=['policy/refund-v4.pdf']",
+    "[graph] completed in 5080ms | workers=['retrieval_worker', 'policy_tool_worker', 'synthesis_worker'] | confidence=0.70"
   ],
   "workers_called": [
     "retrieval_worker",
@@ -136,7 +136,7 @@
     "synthesis_worker"
   ],
   "supervisor_route": "policy_tool_worker",
-  "latency_ms": 3195,
-  "run_id": "run_20260414_165841",
-  "question_id": "q_test_2"
+  "latency_ms": 5080,
+  "run_id": "run_20260414_171511",
+  "question_id": "q02"
 }
