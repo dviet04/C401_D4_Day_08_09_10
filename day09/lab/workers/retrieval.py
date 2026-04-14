@@ -17,6 +17,9 @@ Gọi độc lập để test:
 
 import os
 import sys
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ─────────────────────────────────────────────
 # Worker Contract (xem contracts/worker_contracts.yaml)
@@ -33,25 +36,41 @@ def _get_embedding_fn():
     Trả về embedding function.
     TODO Sprint 1: Implement dùng OpenAI hoặc Sentence Transformers.
     """
-    # Option A: Sentence Transformers (offline, không cần API key)
+    # Option A: OpenAI (cần API key) - Đã được ưu tiên
+    try:
+        from openai import OpenAI
+        if os.getenv("OPENAI_API_KEY"):
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            def embed(text: str) -> list:
+                resp = client.embeddings.create(input=text, model="text-embedding-3-small")
+                return resp.data[0].embedding
+            return embed
+    except Exception:
+        pass
+
+    # Option B: Sentence Transformers (offline, không cần API key)
     try:
         from sentence_transformers import SentenceTransformer
         model = SentenceTransformer("all-MiniLM-L6-v2")
         def embed(text: str) -> list:
             return model.encode([text])[0].tolist()
         return embed
-    except ImportError:
+    except Exception:
         pass
 
-    # Option B: OpenAI (cần API key)
+    # Option C: Gemini (cần API key)
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        def embed(text: str) -> list:
-            resp = client.embeddings.create(input=text, model="text-embedding-3-small")
-            return resp.data[0].embedding
-        return embed
-    except ImportError:
+        import google.generativeai as genai
+        if os.getenv("GOOGLE_API_KEY"):
+            genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+            def embed(text: str) -> list:
+                resp = genai.embed_content(
+                    model="models/text-embedding-004",
+                    content=text
+                )
+                return resp['embedding']
+            return embed
+    except Exception:
         pass
 
     # Fallback: random embeddings cho test (KHÔNG dùng production)
@@ -68,16 +87,25 @@ def _get_collection():
     TODO Sprint 2: Đảm bảo collection đã được build từ Step 3 trong README.
     """
     import chromadb
-    client = chromadb.PersistentClient(path="./chroma_db")
+
+    # Dùng đường dẫn tuyệt đối dựa trên vị trí file này để đảm bảo
+    # chạy đúng dù gọi từ thư mục workers/, lab/, hay bất kỳ nơi nào.
+    # Cấu trúc: workers/retrieval.py → lab/ → day09/ → Lecture../ → day08/lab/chroma_db
+    _this_dir = os.path.dirname(os.path.abspath(__file__))
+    _chroma_path = os.path.normpath(
+        os.path.join(_this_dir, "..", "..", "..", "day08", "lab", "chroma_db")
+    )
+    client = chromadb.PersistentClient(path=_chroma_path)
     try:
-        collection = client.get_collection("day09_docs")
+        # Collection 'rag_lab' được tạo sẵn từ Day 08
+        collection = client.get_collection("rag_lab")
     except Exception:
         # Auto-create nếu chưa có
         collection = client.get_or_create_collection(
-            "day09_docs",
+            "rag_lab",
             metadata={"hnsw:space": "cosine"}
         )
-        print(f"⚠️  Collection 'day09_docs' chưa có data. Chạy index script trong README trước.")
+        print(f"⚠️  Collection 'rag_lab' chưa có data. Chạy index script trong README trước.")
     return collection
 
 
@@ -152,9 +180,16 @@ def run(state: dict) -> dict:
     }
 
     try:
-        chunks = retrieve_dense(task, top_k=top_k)
+        new_chunks = retrieve_dense(task, top_k=top_k)
 
-        sources = list({c["source"] for c in chunks})
+        # Merge nếu đã có chunks từ trước
+        existing_chunks = state.get("retrieved_chunks", [])
+        chunks = existing_chunks + new_chunks
+        
+        # Merge sources
+        existing_sources = state.get("retrieved_sources", [])
+        new_sources = list({c["source"] for c in new_chunks})
+        sources = list(set(existing_sources + new_sources))
 
         state["retrieved_chunks"] = chunks
         state["retrieved_sources"] = sources
@@ -164,13 +199,14 @@ def run(state: dict) -> dict:
             "sources": sources,
         }
         state["history"].append(
-            f"[{WORKER_NAME}] retrieved {len(chunks)} chunks from {sources}"
+            f"[{WORKER_NAME}] retrieved {len(new_chunks)} new chunks from {new_sources}"
         )
 
     except Exception as e:
         worker_io["error"] = {"code": "RETRIEVAL_FAILED", "reason": str(e)}
-        state["retrieved_chunks"] = []
-        state["retrieved_sources"] = []
+        # Giữ nguyên nếu đã có thay vì reset về rỗng
+        state.setdefault("retrieved_chunks", [])
+        state.setdefault("retrieved_sources", [])
         state["history"].append(f"[{WORKER_NAME}] ERROR: {e}")
 
     # Ghi worker IO vào state để trace
