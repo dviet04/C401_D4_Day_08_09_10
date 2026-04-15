@@ -32,7 +32,7 @@ ALLOWED_DOC_IDS = {
     "sla_p1_2026": {"min_effective_date": None},
     "it_helpdesk_faq": {"min_effective_date": None},
     "hr_leave_policy": {"min_effective_date": "2026-01-01"},
-    "access_sop": {"min_effective_date": None},
+    "access_sop": {"min_effective_date": "2026-01-01"},
 }
 
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -201,15 +201,16 @@ def clean_rows(
         # R8: normalize biểu thức ngày ordinal/zero-padded
         text, _norm_modified = _normalize_ordinal_day_format(text)
 
+       
+        # R4: chunk_text rỗng
+        if not text:
+            quarantine.append({**raw, "reason": "missing_chunk_text"})
+            continue
+
         # R9: quarantine chunk quá ngắn (phân biệt với R4 rỗng hoàn toàn)
         if _is_chunk_too_short(text):
             quarantine.append({**raw, "reason": f"chunk_too_short_lt{MIN_CHUNK_CHARS}chars",
                                "chunk_len": len(text.strip())})
-            continue
-
-        # R4: chunk_text rỗng
-        if not text:
-            quarantine.append({**raw, "reason": "missing_chunk_text"})
             continue
 
         # R5: dedupe

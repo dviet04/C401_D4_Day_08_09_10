@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
-
+from transform.cleaning_rules import ALLOWED_DOC_IDS
 
 @dataclass
 class ExpectationResult:
@@ -135,6 +135,43 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
             ok8,
             "warn",
             f"refund_chunks_in_cleaned={len(refund_chunks)} :: Ít nhất 1 chunk policy_refund_v4 phải còn sau clean.",
+        )
+    )
+    # E9: no duplicate normalized chunk_text
+    seen = set()
+    dup_count = 0
+    for r in cleaned_rows:
+        key = " ".join((r.get("chunk_text") or "").strip().split()).lower()
+        if key in seen:
+            dup_count += 1
+        seen.add(key)
+    ok9 = dup_count == 0
+    results.append(
+        ExpectationResult(
+            "no_duplicate_chunk_text",
+            ok9,
+            "halt",
+            f"duplicate_chunks={dup_count}",
+        )
+    )
+    # E10: không còn row nào vi phạm min_effective_date theo config (R3 generic)
+    stale_policy_rows = []
+    for r in cleaned_rows:
+        doc_id = r.get("doc_id")
+        eff = (r.get("effective_date") or "").strip()
+        doc_rules = ALLOWED_DOC_IDS.get(doc_id, {})
+        min_eff = doc_rules.get("min_effective_date")
+
+        if min_eff is not None and eff and eff < min_eff:
+            stale_policy_rows.append(r)
+
+    ok10 = len(stale_policy_rows) == 0
+    results.append(
+        ExpectationResult(
+            "no_stale_policy_below_min_effective_date",
+            ok10,
+            "halt",
+            f"violations={len(stale_policy_rows)}",
         )
     )
 
