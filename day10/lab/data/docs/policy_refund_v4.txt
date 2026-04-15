@@ -1,0 +1,33 @@
+CHÍNH SÁCH HOÀN TIỀN — PHIÊN BẢN 4 (Hiệu lực từ 01/02/2026)
+doc_id: policy_refund_v4
+effective_date: 2026-02-01
+
+== ĐIỀU KIỆN HOÀN TIỀN ==
+
+1. Yêu cầu được gửi trong vòng 7 ngày làm việc kể từ thời điểm xác nhận đơn hàng.
+   Đây là cửa sổ hoàn tiền chính thức theo policy v4 (cập nhật từ v3 là 14 ngày làm việc).
+
+2. Sản phẩm phải còn nguyên vẹn, chưa qua sử dụng, có đầy đủ hóa đơn mua hàng.
+
+3. Hoàn tiền được thực hiện qua hình thức thanh toán ban đầu trong vòng 5–7 ngày làm việc
+   kể từ khi CS xác nhận yêu cầu hợp lệ.
+
+== TRƯỜNG HỢP KHÔNG ĐƯỢC HOÀN TIỀN ==
+
+- Sản phẩm đã được kích hoạt hoặc sử dụng dịch vụ số.
+- Yêu cầu nộp sau 7 ngày làm việc kể từ ngày xác nhận đơn.
+- Không có bằng chứng mua hàng hợp lệ.
+
+== QUY TRÌNH ==
+
+Bước 1: Khách hàng liên hệ CS qua portal hoặc email support@company.vn
+Bước 2: CS xác nhận đủ điều kiện trong vòng 1 ngày làm việc
+Bước 3: Phòng tài chính xử lý hoàn tiền trong 5–7 ngày làm việc
+
+== GHI CHÚ LỊCH SỬ PHIÊN BẢN ==
+- v1 (2024-01): cửa sổ 30 ngày
+- v2 (2024-07): cửa sổ 21 ngày
+- v3 (2025-06): cửa sổ 14 ngày làm việc  ← ĐÃ LỖI THỜI
+- v4 (2026-02): cửa sổ 7 ngày làm việc   ← PHIÊN BẢN HIỆN HÀNH
+
+Liên hệ: cs-policy@company.vn | Phê duyệt: Giám đốc CS

@@ -16,9 +16,11 @@ Gọi độc lập để test:
     python workers/policy_tool.py
 """
 #v1
+import json
 import os
 import sys
 from typing import Optional
+from urllib import error, request
 
 WORKER_NAME = "policy_tool_worker"
 
@@ -58,10 +60,24 @@ WORKER_NAME = "policy_tool_worker"
 #         }
 
 def _call_mcp_tool(tool_name: str, tool_input: dict) -> dict:
+<<<<<<< HEAD
+=======
+    """
+    Gọi MCP tool qua HTTP FastAPI server.
+
+    Không đổi logic worker; chỉ đổi transport layer từ in-process import
+    sang HTTP POST để đạt mức Advanced.
+    """
+>>>>>>> main
     from datetime import datetime
     import requests
 
+    mcp_server_url = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8000")
+    endpoint = f"{mcp_server_url.rstrip('/')}/tools/call"
+    payload = {"tool": tool_name, "input": tool_input}
+
     try:
+<<<<<<< HEAD
         resp = requests.post(
             f"http://127.0.0.1:8000/tools/{tool_name}",
             json={"input": tool_input},
@@ -75,6 +91,33 @@ def _call_mcp_tool(tool_name: str, tool_input: dict) -> dict:
             "input": tool_input,
             "output": payload.get("output"),
             "error": None,
+=======
+        req = request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8")
+            result = json.loads(body)
+            result.setdefault("tool", tool_name)
+            result.setdefault("input", tool_input)
+            result.setdefault("timestamp", datetime.now().isoformat())
+            result.setdefault("error", None)
+            return result
+    except error.HTTPError as e:
+        try:
+            err_body = e.read().decode("utf-8")
+            parsed = json.loads(err_body)
+        except Exception:
+            parsed = {"detail": err_body if 'err_body' in locals() else str(e)}
+        return {
+            "tool": tool_name,
+            "input": tool_input,
+            "output": None,
+            "error": {"code": "MCP_HTTP_ERROR", "reason": parsed},
+>>>>>>> main
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:

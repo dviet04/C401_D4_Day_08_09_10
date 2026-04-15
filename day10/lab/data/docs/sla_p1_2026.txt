@@ -1,0 +1,41 @@
+QUY ĐỊNH SLA TICKET — NĂM 2026
+doc_id: sla_p1_2026
+effective_date: 2026-02-01
+
+== PHÂN LOẠI TICKET VÀ SLA ==
+
+P1 — CRITICAL (Ảnh hưởng toàn hệ thống / production down):
+  - SLA phản hồi ban đầu: 15 phút
+  - SLA resolution: 4 giờ
+  - Escalation: Tự động sau 30 phút chưa assign
+  - Kênh: Hotline + Slack #incident-p1
+
+P2 — HIGH (Ảnh hưởng một phần nghiệp vụ / nhiều user):
+  - SLA phản hồi ban đầu: 2 giờ
+  - SLA resolution: 1 ngày làm việc
+  - Kênh: Email + Jira
+
+P3 — MEDIUM (Lỗi không ảnh hưởng nghiệp vụ chính):
+  - SLA phản hồi: 1 ngày làm việc
+  - SLA resolution: 3 ngày làm việc
+
+P4 — LOW (Hỏi thông tin / tính năng nhỏ):
+  - SLA phản hồi: 2 ngày làm việc
+  - SLA resolution: 5 ngày làm việc
+
+== ĐỊNH NGHĨA "RESPONSE" VÀ "RESOLUTION" ==
+
+Response: CS xác nhận đã tiếp nhận và assign cho kỹ thuật viên.
+Resolution: Vấn đề được khắc phục hoàn toàn và user xác nhận.
+
+== QUY TRÌNH ESCALATION P1 ==
+
+0:00 → Ticket tạo
+0:15 → CS phải đã response (gửi ack + assign)
+0:30 → Nếu chưa có action → tự động ping Lead kỹ thuật
+1:00 → Nếu chưa có tiến độ → ping Manager
+4:00 → SLA resolution deadline → báo cáo post-mortem bắt buộc
+
+== GHI CHÚ ==
+SLA này áp dụng cho toàn bộ khối CS & IT Helpdesk năm 2026.
+Đo thời gian theo múi giờ GMT+7. Ngày làm việc = T2–T6, 8:00–18:00.

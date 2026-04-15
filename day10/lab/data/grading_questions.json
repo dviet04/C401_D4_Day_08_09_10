@@ -1,0 +1,31 @@
+[
+  {
+    "id": "gq_d10_01",
+    "question": "SLA phản hồi ban đầu cho ticket P1 là bao lâu?",
+    "must_contain_any": ["15 phút"],
+    "must_not_contain": [],
+    "grading_criteria": ["contains_expected=true"],
+    "note": "Chunk từ sla_p1_2026 — phải có '15 phút'"
+  },
+  {
+    "id": "gq_d10_02",
+    "question": "Tài khoản bị khóa sau bao nhiêu lần đăng nhập sai liên tiếp?",
+    "must_contain_any": ["5 lần"],
+    "must_not_contain": [],
+    "grading_criteria": ["contains_expected=true"],
+    "note": "Chunk từ it_helpdesk_faq — phải có '5 lần'"
+  },
+  {
+    "id": "gq_d10_03",
+    "question": "Theo chính sách nhân sự hiện hành năm 2026, nhân viên dưới 3 năm kinh nghiệm được bao nhiêu ngày phép năm?",
+    "must_contain_any": ["12 ngày", "12 ngày phép năm"],
+    "must_not_contain": ["10 ngày phép năm"],
+    "expect_top1_doc_id": "hr_leave_policy",
+    "grading_criteria": [
+      "contains_expected=true",
+      "hits_forbidden=false",
+      "top1_doc_matches=true"
+    ],
+    "note": "Phải lấy từ hr_leave_policy 2026 (12 ngày), không được có chunk cũ 10 ngày; top-1 phải là hr_leave_policy"
+  }
+]

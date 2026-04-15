@@ -1,0 +1,46 @@
+QUY TRÌNH KIỂM SOÁT TRUY CẬP HỆ THỐNG (ACCESS SOP)
+doc_id: access_sop
+effective_date: 2026-02-01
+
+== MỤC ĐÍCH ==
+
+Tài liệu này mô tả quy trình chuẩn để cấp, thu hồi và kiểm tra quyền truy cập
+vào các hệ thống nội bộ của công ty, đảm bảo tuân thủ nguyên tắc Least Privilege.
+
+== NGUYÊN TẮC CƠ BẢN ==
+
+1. Least Privilege: Mỗi nhân viên chỉ được cấp quyền tối thiểu cần thiết cho công việc.
+2. Need-to-Know: Quyền truy cập phải có lý do nghiệp vụ rõ ràng.
+3. Review Định Kỳ: Quyền truy cập được review mỗi 90 ngày.
+4. Off-boarding Tức Thời: Khi nhân viên nghỉ việc, tất cả quyền bị thu hồi trong 24 giờ.
+
+== QUY TRÌNH CẤP QUYỀN ==
+
+Bước 1 — Yêu cầu: Nhân viên tạo ticket "Access Request" trên helpdesk portal.
+Bước 2 — Phê duyệt Manager: Quản lý trực tiếp duyệt trong 1 ngày làm việc.
+Bước 3 — Review IT Security: IT Security review các hệ thống nhạy cảm (trong 1 ngày).
+Bước 4 — Cấp quyền: IT Helpdesk thực hiện trong SLA P3 (3 ngày làm việc).
+Bước 5 — Xác nhận: Nhân viên confirm qua email đã có quyền.
+
+== CÁC HỆ THỐNG VÀ CẤP ĐỘ NHẠY CẢM ==
+
+Cấp độ 1 (Công khai nội bộ): Wiki, Confluence, Google Drive công ty
+  → Cấp tự động khi onboarding
+
+Cấp độ 2 (Hạn chế): CRM, Jira, Slack workspace
+  → Yêu cầu Manager duyệt
+
+Cấp độ 3 (Bí mật): Database production, Billing system, HR records
+  → Yêu cầu IT Security review + CISO approve
+
+== QUY TRÌNH THU HỒI ==
+
+Trường hợp thông thường: Nhân viên gửi email yêu cầu thu hồi quyền người khác → IT xử lý P3.
+Trường hợp khẩn cấp (bảo mật): Tạo P1 ticket → IT Security thực hiện trong 2 giờ.
+Off-boarding: HR gửi thông báo → tất cả quyền bị thu hồi khỏi tất cả hệ thống trong 24 giờ.
+
+== AUDIT ==
+Mọi hoạt động cấp/thu hồi quyền được ghi log vào hệ thống SIEM.
+Review hàng quý do IT Security thực hiện và báo cáo cho CISO.
+
+Liên hệ: it-security@company.vn | Policy owner: CISO

@@ -1,0 +1,91 @@
+# Data contract — Lab Day 10 (tiếp nối artifact CS + IT Helpdesk)
+# Cập nhật: 2026-04-15 — điền owner, SLA freshness, và nguồn canonical.
+
+version: "1.1"
+dataset: "kb_chunk_export"
+owner_team: "AI-Engineering / CS-IT Helpdesk Squad"
+
+schema_cleaned:
+  chunk_id:
+    type: string
+    required: true
+    description: "ID ổn định sau clean (sha256(doc_id|chunk_text|seq)[:16])"
+  doc_id:
+    type: string
+    required: true
+    description: "Khóa logic tài liệu nguồn (vd policy_refund_v4)"
+  chunk_text:
+    type: string
+    required: true
+    constraints:
+      min_length: 20           # Tăng từ 8 → 20 sau R9 mới (xem cleaning_rules.py)
+      no_bom: true             # E7: không còn BOM sau R7
+  effective_date:
+    type: date
+    required: true
+    format: "YYYY-MM-DD"
+  exported_at:
+    type: datetime
+    required: true
+
+quality_rules:
+  - id: "no_duplicate_chunk_text"
+    severity: "warn"
+    rule: "R5"
+  - id: "no_stale_refund_window"
+    description: "Không được để chunk policy refund chứa cửa sổ 14 ngày làm việc (v3 stale)"
+    severity: "halt"
+    rule: "R6 + E3"
+  - id: "no_bom_in_chunk_text"
+    description: "Không được còn BOM (U+FEFF) trong chunk_text sau R7"
+    severity: "halt"
+    rule: "R7 + E7"
+  - id: "chunk_min_20_chars"
+    description: "Chunk dưới 20 ký tự thực bị quarantine (R9)"
+    severity: "halt"
+    rule: "R9"
+  - id: "refund_doc_coverage_min1"
+    description: "policy_refund_v4 phải có ít nhất 1 chunk sau clean"
+    severity: "warn"
+    rule: "E8"
+
+freshness:
+  measured_at: "publish"            # embed_publish_timestamp (boundary 2)
+  measure_also: "ingest"            # ingest_start_timestamp (boundary 1)
+  sla_hours: 24                     # ingest boundary SLA
+  publish_sla_hours: 23             # publish boundary SLA (chặt hơn 1h)
+  alert_channel: "slack:#data-ops"  # TODO: điền channel thật
+
+canonical_sources:
+  - path: "data/docs/policy_refund_v4.txt"
+    doc_id: "policy_refund_v4"
+    version: "v4"
+    note: "v4=7 ngày làm việc; v3 cũ=14 ngày đã bị loại"
+  - path: "data/docs/sla_p1_2026.txt"
+    doc_id: "sla_p1_2026"
+    version: "2026"
+  - path: "data/docs/it_helpdesk_faq.txt"
+    doc_id: "it_helpdesk_faq"
+    version: "2026"
+  - path: "data/docs/hr_leave_policy.txt"
+    doc_id: "hr_leave_policy"
+    version: "2026"
+    note: "2026=12 ngày phép; 2025 cũ=10 ngày đã bị loại"
+  - path: "data/docs/access_sop.txt"
+    doc_id: "access_sop"
+    version: "2026"
+
+# Allowlist — PHẢI đồng bộ với ALLOWED_DOC_IDS trong cleaning_rules.py
+allowed_doc_ids:
+  - policy_refund_v4
+  - sla_p1_2026
+  - it_helpdesk_faq
+  - hr_leave_policy
+  - access_sop
+
+# Distinction (d): cutoff versioning đọc từ env thay vì hard-code trong code
+# Trong cleaning_rules.py: hr_leave_min_effective_date đọc từ env variable
+# HR_LEAVE_MIN_EFFECTIVE_DATE (default: 2026-01-01)
+policy_versioning:
+  hr_leave_min_effective_date: "2026-01-01"   # override bằng env: HR_LEAVE_MIN_EFFECTIVE_DATE
+  chunk_min_chars: 20                          # override bằng env: MIN_CHUNK_CHARS

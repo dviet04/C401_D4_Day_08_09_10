@@ -33,8 +33,9 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
 
 # ─────────────────────────────────────────────
 # Tool Definitions (Schema Discovery)
@@ -330,6 +331,51 @@ def dispatch_tool(tool_name: str, tool_input: dict) -> dict:
 
 
 # ─────────────────────────────────────────────
+# FastAPI Wrapper — Advanced MCP over HTTP
+# ─────────────────────────────────────────────
+
+app = FastAPI(title="Mock MCP Server", version="1.0.0")
+
+
+class MCPToolCallRequest(BaseModel):
+    tool: str = Field(..., description="Tên tool cần gọi")
+    input: Dict[str, Any] = Field(default_factory=dict, description="Input JSON cho tool")
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok", "service": "mock_mcp_server"}
+
+
+@app.get("/tools")
+def http_list_tools() -> dict:
+    return {"tools": list_tools()}
+
+
+@app.post("/tools/call")
+def http_call_tool(payload: MCPToolCallRequest) -> dict:
+    result = dispatch_tool(payload.tool, payload.input)
+    response = {
+        "tool": payload.tool,
+        "input": payload.input,
+        "output": result,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    # Tool không tồn tại → coi là client error
+    if isinstance(result, dict) and result.get("error") and "không tồn tại" in result.get("error", ""):
+        raise HTTPException(status_code=404, detail=response)
+
+    return response
+
+
+def main() -> None:
+    import uvicorn
+
+    uvicorn.run("mcp_server_fastapi:app", host="127.0.0.1", port=8000, reload=False)
+
+
+# ─────────────────────────────────────────────
 # Test & Demo
 # ─────────────────────────────────────────────
 
@@ -352,6 +398,12 @@ def http_call_tool(tool_name: str, req: ToolCallRequest):
     }
 
 if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "serve":
+        main()
+        raise SystemExit(0)
+
     print("=" * 60)
     print("MCP Server — Tool Discovery & Test")
     print("=" * 60)

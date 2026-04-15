@@ -185,7 +185,8 @@ def analyze_traces(traces_dir: str = "artifacts/traces") -> dict:
 
     traces = []
     for fname in trace_files:
-        with open(os.path.join(traces_dir, fname), "r", encoding="utf-8") as f:
+
+        with open(os.path.join(traces_dir, fname), encoding="utf-8") as f:
             traces.append(json.load(f))
 
     # Compute metrics
@@ -344,8 +345,12 @@ if __name__ == "__main__":
             print(f"  {k}: {v}")
 
     else:
-        # Default: chạy test questions
-        results = run_test_questions(args.test_file)
+        # Trực tiếp chạy grading questions làm mặc định (theo yêu cầu user)
+        print("🚀 Khởi chạy Grading Questions (mặc định)...")
+        log_file = run_grading_questions()
+        if log_file:
+            print(f"\n✅ Grading log: {log_file}")
+            print("   Nộp file này trước 18:00!")
 
         # Phân tích trace
         metrics = analyze_traces()

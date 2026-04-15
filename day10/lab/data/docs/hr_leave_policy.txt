@@ -1,0 +1,39 @@
+CHÍNH SÁCH NGHỈ PHÉP NHÂN VIÊN — NĂM 2026
+doc_id: hr_leave_policy
+effective_date: 2026-02-01
+
+== CHÍNH SÁCH NGHỈ PHÉP NĂM (HIỆU LỰC TỪ 01/01/2026) ==
+
+Theo chính sách nhân sự cập nhật năm 2026:
+
+Nhóm 1 — Dưới 3 năm kinh nghiệm tại công ty:
+  Được 12 ngày phép năm (tăng từ 10 ngày của chính sách cũ 2025).
+
+Nhóm 2 — Từ 3 đến dưới 5 năm:
+  Được 15 ngày phép năm.
+
+Nhóm 3 — Từ 5 năm trở lên:
+  Được 18 ngày phép năm.
+
+Nhóm đặc biệt — Quản lý cấp trung (Manager+):
+  Được 20 ngày phép năm, cộng thêm 3 ngày phép lãnh đạo.
+
+== QUY ĐỊNH SỬ DỤNG PHÉP ==
+
+1. Đăng ký phép ít nhất 3 ngày làm việc trước (ngoại trừ phép khẩn cấp).
+2. Phép năm không được chuyển sang năm sau (use-it-or-lose-it policy).
+3. Có thể bán phép dư tối đa 5 ngày vào cuối năm (áp dụng trước 31/12).
+4. Phép thai sản/phụ sản: theo quy định Luật Lao động hiện hành (không trừ phép năm).
+
+== LỊCH SỬ PHIÊN BẢN ==
+- Chính sách 2025 (lỗi thời): Nhân viên dưới 3 năm được 10 ngày phép năm.
+  → ĐÃ THAY THẾ BỞI CHÍNH SÁCH 2026.
+- Chính sách 2026 (hiện hành): Nhân viên dưới 3 năm được 12 ngày phép năm.
+
+== QUY TRÌNH ĐĂNG KÝ ==
+Bước 1: Đăng nhập HR Portal → Leave Management
+Bước 2: Chọn loại phép và ngày bắt đầu/kết thúc
+Bước 3: Hệ thống tự gửi email phê duyệt đến quản lý trực tiếp
+Bước 4: Nhận email xác nhận sau khi quản lý duyệt (thường trong 1 ngày làm việc)
+
+Liên hệ: hr@company.vn | Phê duyệt bởi: Giám đốc Nhân sự

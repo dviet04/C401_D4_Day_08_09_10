@@ -1,0 +1,48 @@
+IT HELPDESK — CÂU HỎI THƯỜNG GẶP (FAQ)
+doc_id: it_helpdesk_faq
+effective_date: 2026-02-01
+
+== TÀI KHOẢN VÀ BẢO MẬT ==
+
+Q: Tài khoản bị khóa sau bao nhiêu lần đăng nhập sai?
+A: Tài khoản bị khóa sau 5 lần đăng nhập sai liên tiếp.
+   Sau khi bị khóa, vui lòng liên hệ IT Helpdesk để mở khóa hoặc
+   sử dụng tính năng "Quên mật khẩu" nếu đã xác minh email.
+
+Q: Đổi mật khẩu mất bao lâu để đồng bộ?
+A: Đổi mật khẩu qua portal self-service có thể mất tối đa 24 giờ để đồng bộ
+   toàn hệ thống (SSO, email, VPN). Trong thời gian này, dùng mật khẩu mới
+   cho hệ thống chính, mật khẩu cũ cho các ứng dụng chưa đồng bộ.
+
+Q: VPN không kết nối được?
+A: Kiểm tra theo thứ tự:
+   1. Token MFA còn hiệu lực (mỗi token dùng được 30 giây)
+   2. Certificate VPN chưa hết hạn (xem My Apps → VPN Certificate)
+   3. Thử endpoint dự phòng: vpn-backup.company.vn
+
+== THIẾT BỊ VÀ PHẦN MỀM ==
+
+Q: Cài phần mềm mới cần quyền gì?
+A: Mọi phần mềm mới cần được approve bởi IT qua Jira ticket (loại: Software Request).
+   Thời gian xử lý: P3 (3 ngày làm việc).
+
+Q: Laptop bị chậm sau khi update Windows?
+A: Chờ 1–2 giờ sau update để indexing hoàn tất. Nếu vẫn chậm sau 2 giờ,
+   mở Task Manager → Performance → kiểm tra CPU/RAM. Report nếu RAM > 90%.
+
+== TRUY CẬP VÀ PHÂN QUYỀN ==
+
+Q: Cần quyền truy cập hệ thống mới?
+A: Tạo ticket loại "Access Request" trên portal, điền:
+   - Hệ thống cần truy cập
+   - Lý do nghiệp vụ
+   - Phê duyệt của quản lý trực tiếp
+   SLA: P3 (3 ngày làm việc), với approval từ Manager: P2 (1 ngày).
+
+Q: Mất quyền truy cập đột ngột?
+A: Có thể do off-boarding tự động hoặc policy rotation (mỗi 90 ngày).
+   Kiểm tra email từ IT-Security về thông báo. Tạo ticket P2 nếu ảnh hưởng công việc.
+
+== LIÊN HỆ ==
+Hotline IT: ext. 1234 | Email: it-helpdesk@company.vn | Tickets: helpdesk.company.vn
+Giờ làm việc: T2–T6, 8:00–18:00. Ngoài giờ: chỉ P1/P2 qua hotline.
