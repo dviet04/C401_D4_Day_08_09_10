@@ -112,5 +112,31 @@ def run_expectations(cleaned_rows: List[Dict[str, Any]]) -> Tuple[List[Expectati
         )
     )
 
+    # E7: không còn BOM trong chunk_text sau khi đã clean (chứng minh R7 hoạt động)
+    bom_in_text = [
+        r for r in cleaned_rows if "\ufeff" in (r.get("chunk_text") or "")
+    ]
+    ok7 = len(bom_in_text) == 0
+    results.append(
+        ExpectationResult(
+            "no_bom_in_chunk_text",
+            ok7,
+            "halt",
+            f"bom_violations={len(bom_in_text)} :: Sau R7 không được còn BOM; FAIL nghĩa là R7 bị bypass.",
+        )
+    )
+
+    # E8: policy_refund_v4 phải có ít nhất 1 chunk sau clean (alert nếu bị quarantine hết)
+    refund_chunks = [r for r in cleaned_rows if r.get("doc_id") == "policy_refund_v4"]
+    ok8 = len(refund_chunks) >= 1
+    results.append(
+        ExpectationResult(
+            "refund_doc_coverage_min1",
+            ok8,
+            "warn",
+            f"refund_chunks_in_cleaned={len(refund_chunks)} :: Ít nhất 1 chunk policy_refund_v4 phải còn sau clean.",
+        )
+    )
+
     halt = any(not r.passed and r.severity == "halt" for r in results)
     return results, halt

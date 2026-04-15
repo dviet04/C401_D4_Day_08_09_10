@@ -1,0 +1,6 @@
+{
+  "run_id": "demo-stale",
+  "ingest_start_timestamp": "2026-04-10T08:00:00+00:00",
+  "embed_publish_timestamp": "2026-04-10T09:00:00+00:00",
+  "latest_exported_at": "2026-04-10T08:00:00+00:00"
+}

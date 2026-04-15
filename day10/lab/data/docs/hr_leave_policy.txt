@@ -1,60 +1,39 @@
-CHÍNH SÁCH NGHỈ PHÉP VÀ PHÚC LỢI NHÂN SỰ
-Source: hr/leave-policy-2026.pdf
-Department: HR
-Effective Date: 2026-01-01
-Access: internal
+CHÍNH SÁCH NGHỈ PHÉP NHÂN VIÊN — NĂM 2026
+doc_id: hr_leave_policy
+effective_date: 2026-02-01
 
-=== Phần 1: Các loại nghỉ phép ===
+== CHÍNH SÁCH NGHỈ PHÉP NĂM (HIỆU LỰC TỪ 01/01/2026) ==
 
-1.1 Nghỉ phép năm (Annual Leave):
-- Số ngày: 12 ngày/năm cho nhân viên dưới 3 năm kinh nghiệm.
-- Số ngày: 15 ngày/năm cho nhân viên từ 3-5 năm kinh nghiệm.
-- Số ngày: 18 ngày/năm cho nhân viên trên 5 năm kinh nghiệm.
-- Chuyển năm sau: Tối đa 5 ngày phép năm chưa dùng được chuyển sang năm tiếp theo.
+Theo chính sách nhân sự cập nhật năm 2026:
 
-1.2 Nghỉ ốm (Sick Leave):
-- Số ngày: 10 ngày/năm có trả lương.
-- Yêu cầu: Thông báo cho Line Manager trước 9:00 sáng ngày nghỉ.
-- Nếu nghỉ trên 3 ngày liên tiếp: Cần giấy tờ y tế từ bệnh viện.
+Nhóm 1 — Dưới 3 năm kinh nghiệm tại công ty:
+  Được 12 ngày phép năm (tăng từ 10 ngày của chính sách cũ 2025).
 
-1.3 Nghỉ thai sản:
-- Nghỉ sinh con: 6 tháng theo quy định Luật Lao động.
-- Nghỉ nuôi con nhỏ: 1 tiếng/ngày trong 12 tháng đầu sau sinh.
+Nhóm 2 — Từ 3 đến dưới 5 năm:
+  Được 15 ngày phép năm.
 
-1.4 Nghỉ lễ tết:
-Theo lịch nghỉ lễ quốc gia do HR công bố hàng năm vào tháng 12.
+Nhóm 3 — Từ 5 năm trở lên:
+  Được 18 ngày phép năm.
 
-=== Phần 2: Quy trình xin nghỉ phép ===
+Nhóm đặc biệt — Quản lý cấp trung (Manager+):
+  Được 20 ngày phép năm, cộng thêm 3 ngày phép lãnh đạo.
 
-Bước 1: Nhân viên gửi yêu cầu nghỉ phép qua hệ thống HR Portal (https://hr.company.internal) ít nhất 3 ngày làm việc trước ngày nghỉ.
-Bước 2: Line Manager phê duyệt hoặc từ chối trong vòng 1 ngày làm việc.
-Bước 3: Nhân viên nhận thông báo qua email sau khi được phê duyệt.
+== QUY ĐỊNH SỬ DỤNG PHÉP ==
 
-Trường hợp khẩn cấp: Có thể gửi yêu cầu muộn hơn nhưng phải được Line Manager đồng ý qua tin nhắn trực tiếp.
+1. Đăng ký phép ít nhất 3 ngày làm việc trước (ngoại trừ phép khẩn cấp).
+2. Phép năm không được chuyển sang năm sau (use-it-or-lose-it policy).
+3. Có thể bán phép dư tối đa 5 ngày vào cuối năm (áp dụng trước 31/12).
+4. Phép thai sản/phụ sản: theo quy định Luật Lao động hiện hành (không trừ phép năm).
 
-=== Phần 3: Chính sách làm thêm giờ ===
+== LỊCH SỬ PHIÊN BẢN ==
+- Chính sách 2025 (lỗi thời): Nhân viên dưới 3 năm được 10 ngày phép năm.
+  → ĐÃ THAY THẾ BỞI CHÍNH SÁCH 2026.
+- Chính sách 2026 (hiện hành): Nhân viên dưới 3 năm được 12 ngày phép năm.
 
-3.1 Điều kiện làm thêm:
-Làm thêm giờ phải được Line Manager phê duyệt trước bằng văn bản.
+== QUY TRÌNH ĐĂNG KÝ ==
+Bước 1: Đăng nhập HR Portal → Leave Management
+Bước 2: Chọn loại phép và ngày bắt đầu/kết thúc
+Bước 3: Hệ thống tự gửi email phê duyệt đến quản lý trực tiếp
+Bước 4: Nhận email xác nhận sau khi quản lý duyệt (thường trong 1 ngày làm việc)
 
-3.2 Hệ số lương làm thêm:
-- Ngày thường: 150% lương giờ tiêu chuẩn.
-- Ngày cuối tuần: 200% lương giờ tiêu chuẩn.
-- Ngày lễ: 300% lương giờ tiêu chuẩn.
-
-=== Phần 4: Remote work policy ===
-
-4.1 Điều kiện remote:
-- Nhân viên sau probation period có thể làm remote tối đa 2 ngày/tuần.
-- Team Lead phải phê duyệt lịch remote qua HR Portal.
-- Ngày onsite bắt buộc: Thứ 3 và Thứ 5 theo lịch team.
-
-4.2 Yêu cầu kỹ thuật khi remote:
-- Kết nối VPN bắt buộc khi làm việc với hệ thống nội bộ.
-- Camera bật trong các cuộc họp team.
-
-=== Phần 5: Liên hệ HR ===
-Email: hr@company.internal
-Hotline: ext. 2000
-HR Portal: https://hr.company.internal
-Giờ làm việc: Thứ 2 - Thứ 6, 8:30 - 17:30
+Liên hệ: hr@company.vn | Phê duyệt bởi: Giám đốc Nhân sự

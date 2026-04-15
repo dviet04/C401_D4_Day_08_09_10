@@ -23,6 +23,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Fix UnicodeEncodeError trên Windows (cp1252 không encode được tiếng Việt / ký tự đặc biệt)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from dotenv import load_dotenv
 
 from monitoring.freshness_check import check_manifest_freshness
@@ -63,7 +69,9 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     rows = load_raw_csv(raw_path)
     raw_count = len(rows)
+    ingest_start_ts = datetime.now(timezone.utc).isoformat()
     log(f"run_id={run_id}")
+    log(f"ingest_start_timestamp={ingest_start_ts}")
     log(f"raw_records={raw_count}")
 
     cleaned, quarantine = clean_rows(
@@ -102,10 +110,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     latest_exported = ""
     if cleaned:
         latest_exported = max((r.get("exported_at") or "" for r in cleaned), default="")
+    embed_publish_ts = datetime.now(timezone.utc).isoformat()
+    log(f"embed_publish_timestamp={embed_publish_ts}")
 
     manifest = {
         "run_id": run_id,
         "run_timestamp": datetime.now(timezone.utc).isoformat(),
+        "ingest_start_timestamp": ingest_start_ts,
+        "embed_publish_timestamp": embed_publish_ts,
         "raw_path": str(raw_path.relative_to(ROOT)),
         "raw_records": raw_count,
         "cleaned_records": len(cleaned),
