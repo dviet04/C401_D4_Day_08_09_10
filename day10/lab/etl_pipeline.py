@@ -22,7 +22,8 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
+from pydantic import ValidationError
+from quality.schema import CleanedRecord
 
 # Fix UnicodeEncodeError trên Windows (cp1252 không encode được tiếng Việt / ký tự đặc biệt)
 if hasattr(sys.stdout, "reconfigure"):
@@ -97,6 +98,26 @@ def cmd_run(args: argparse.Namespace) -> int:
         rows,
         apply_refund_window_fix=not args.no_refund_fix,
     )
+    schema_errors = []
+    validated_cleaned = []
+
+    for row in cleaned:
+        try:
+            validated = CleanedRecord(**row)
+            validated_cleaned.append(validated.model_dump(mode="json"))
+        except ValidationError as e:
+            schema_errors.append({
+                "row": row,
+                "error": str(e),
+            })
+
+    if schema_errors:
+        logger.error(f"pydantic_validation_failed count={len(schema_errors)}")
+        return 2
+
+    cleaned = validated_cleaned
+    logger.info(f"pydantic_validation_passed count={len(cleaned)}")
+    
     cleaned_path = CLEAN_DIR / f"cleaned_{run_id.replace(':', '-')}.csv"
     quar_path = QUAR_DIR / f"quarantine_{run_id.replace(':', '-')}.csv"
     write_cleaned_csv(cleaned_path, cleaned)
