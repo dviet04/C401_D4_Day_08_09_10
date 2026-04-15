@@ -1,7 +1,7 @@
 # Báo Cáo Cá Nhân — Lab Day 10: Data Pipeline & Observability
 
 **Họ và tên:** Lê Đình Việt 
-**Vai trò:** Ingestion — ___________  
+**Vai trò:** Inject corruption + so sánh eval + quality report 
 **Ngày nộp:** ___________  
 **Độ dài yêu cầu:** **400–650 từ** (ngắn hơn Day 09 vì rubric slide cá nhân ~10% — vẫn phải đủ bằng chứng)
 
