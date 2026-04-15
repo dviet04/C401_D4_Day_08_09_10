@@ -109,14 +109,25 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     results, halt = run_expectations(cleaned)
     for r in results:
-        sym = "OK" if r.passed else "FAIL"
-        logger.info(f"expectation[{r.name}] {sym} ({r.severity}) :: {r.detail}")
+        if not r.passed:
+            if r.severity == "halt":
+                logger.error(f"[FAIL] {r.name} :: {r.detail}")
+            else:
+                logger.warning(f"[WARN] {r.name} :: {r.detail}")
     if halt and not args.skip_validate:
-        logger.info("PIPELINE_HALT: expectation suite failed (halt).")
+        logger.error("PIPELINE HALTED: critical expectation failed.")
         return 2
     if halt and args.skip_validate:
         logger.warning("Expectation failed but --skip-validate is enabled; continuing to embed.")
+    fail_count = sum(1 for r in results if not r.passed and r.severity == "halt")
+    warn_count = sum(1 for r in results if not r.passed and r.severity == "warn")
+
+    if fail_count == 0 and warn_count == 0:
+        logger.info("Validation passed with no issues.")
+    else:
+        logger.info(f"Validation summary: {fail_count} FAIL, {warn_count} WARN")
     # Embed
+
     embed_ok = cmd_embed_internal(
         cleaned_path,
         run_id=run_id,
